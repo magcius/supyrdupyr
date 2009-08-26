@@ -45,7 +45,7 @@ DEBUG = 2
 # *   can only belong to one World at one point.
 # *   begins in the World that spawns it
   
-class App:
+class App(object):
     
     World = 0
     Player = 0
@@ -69,7 +69,7 @@ class App:
             print "Initialised application."
 
 
-class World:
+class World(object):
     
     Player = 0
     Parent = 0
@@ -88,7 +88,7 @@ class World:
         if DEBUG >= 1:
             print ".World initialised."
 
-class Player:
+class Player(object):
     
     Parent = 0
     
