@@ -32,7 +32,7 @@ DEBUG = 2
 # *   currently has a Player hardcoded in.
 
 # World class contains Player class along with entities
-#            init: parent(App), Player(bool)
+#            init: parent(App), Player(bool), model(Model),col_model(Model)
 # *   handles game logic and object positions and movement
 # *   takes player input information from App
 # *   equates to one cell
@@ -46,9 +46,9 @@ DEBUG = 2
 # *   begins in the World that spawns it
 
 SPEED     = 1
-FRICTION  = 0.98
+FRICTION  = 0.92
 AIR_DRAG  = 0.90
-MAX_SPEED = 10
+MAX_SPEED = 20
 
 base.cTrav = CollisionTraverser()
 
@@ -66,50 +66,94 @@ def removeTask(func, *args):
 
 
 class App(object):
+
+    cell_list = { }
     
     def __init__(self):
         if DEBUG >= 1:
             print "Initialising application."
-        self.world = World(self, create_player=True)
+        #create one central nodepath that will hold the main world
+        #neighbours will create their own nodepaths fixed distance 
+        #   from originals.
+        main = PandaNode("origin")
+        main = render.attachNewNode(main)
+        env = loader.loadModel("models/field2.egg")
+        env.reparentTo(main)
+        env.setScale(1, 1, 1)
+        env.setPos(0, 0, 0)
+        
+        envCollide = loader.loadModel("models/field2.collision.egg")
+        envCollide.reparentTo(env)
+        envCollide.setScale(1, 1, 1)
+        envCollide.setPos(0, 0, 0)
+        envCollide.setCollideMask(BitMask32.allOn())
+        self.world = World(self, create_player=True, model=env, col_model=envCollide)
+        self.world.set_neighbours(self.world,"n")
+        self.world.set_neighbours(self.world,"w")
+        self.world.set_neighbours(self.world,"s")
+        self.world.set_neighbours(self.world,"e")
         self.player = self.world.player
+        #temp code to update neighbours once since there's no code
+        #   for moving across cells
+        self.moved_to_new_cell()
         
-        
-        #temporary model until Worlds are finished
-        self.env = loader.loadModel("models/field2.egg")
-        self.env.reparentTo(render)
-        self.env.setScale(1, 1, 1)
-        self.env.setPos(0, 0, 0)
-
-        self.envCollide = loader.loadModel("models/field2.collision.egg")
-        self.envCollide.reparentTo(self.env)
-        self.envCollide.setScale(1, 1, 1)
-        self.envCollide.setPos(0, 0, 0)
-        self.envCollide.setCollideMask(BitMask32.allOn())
-        
-
-        # base.disableMouse()
-        
-        # base.camera.setPos(self.player.x,self.player.y-10,self.player.z + 2)
-        ##not set to point at the player yet, direction static
         
         if DEBUG >= 1:
             print "Initialised application."
     
+    def moved_to_new_cell(self):
+        for i in self.cell_list:
+            self.cell_list[i].remove_node()
+        self.cell_list = { }
+        w = PandaNode("w")
+        w = render.attachNewNode(w)
+        if "w" in self.world.neighbours:
+            self.world.neighbours["w"].model.copyTo(w)
+            w.setPos(0, 512, 0)
+        self.cell_list["w"] = w
+        
+        e = PandaNode("e")
+        e = render.attachNewNode(e)
+        if "e" in self.world.neighbours:
+            self.world.neighbours["e"].model.copyTo(e)
+            e.setPos(0, -512, 0)
+        self.cell_list["e"] = e
+        
+        n = PandaNode("n")
+        n = render.attachNewNode(n)
+        if "n" in self.world.neighbours:
+            self.world.neighbours["n"].model.copyTo(n)
+            n.setPos(512, 0, 0)
+        self.cell_list["n"] = n
+        
+        s = PandaNode("s")
+        s = render.attachNewNode(s)
+        if "s" in self.world.neighbours:
+            self.world.neighbours["s"].model.copyTo(s)
+            s.setPos(-512, 0, 0)
+        self.cell_list["s"] = s
+        
+        for i in self.cell_list:
+            self.cell_list[i].reparentTo(render)
+    
     def simulate(self,task):
-        ##debug movement to test.
-        #self.player.x -= 0.05
-        #self.player.y += 0.009
         self.player.simulate()
 
         x, y, z = self.player.actor.getPos()
-        base.camera.setPos(x, y-10, z+2)
+        base.camera.setPos(x, y-30, z+8)
         
         return Task.cont
 
 
 class World(object):
     
-    def __init__(self, parent, create_player=False):
+    # Neighbours is a dictionary with cardinal directions.
+    neighbours = { }
+    
+    model = 0
+    col_model = 0
+    
+    def __init__(self, parent, create_player=False,model=0,col_model=0):
         if DEBUG == 2:
             print ".Initialising world."
         self.parent = parent
@@ -117,8 +161,15 @@ class World(object):
             self.player = Player(self)
             if DEBUG == 2:
                 print "..Player created."
+        self.model = model
+        self.col_model = col_model
         if DEBUG >= 1:
             print ".World initialised."
+    
+    def set_neighbours(self,world,key):
+        if DEBUG == 2:
+            print ".Adding neighbour to world."
+        self.neighbours[key] = world
             
 class Player(object):
     
