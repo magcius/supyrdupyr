@@ -44,30 +44,52 @@ DEBUG = 2
 # *   handles position for self, logic for self
 # *   can only belong to one World at one point.
 # *   begins in the World that spawns it
-  
+
+SPEED     = 0.02
+FRICTION  = 0.98
+GRAVITY   = 0.00002
+MAX_SPEED = 2
+
+base.cTrav = CollisionTraverser()
+
+tasks = {}
+
+def taskName(func, args):
+    return "%s-%r-Task" % (func, args)
+
+def addTask(func, *args):
+    name = taskName(func, args)
+    tasks[name] = taskMgr.add(func, name, extraArgs=args)
+
+def removeTask(func, *args):
+    taskMgr.remove(tasks[taskName(func, args)])
+
+
 class App(object):
-    
-    World = 0
-    Player = 0
     
     def __init__(self):
         if DEBUG >= 1:
             print "Initialising application."
-        self.World = World(self,True)
-        if self.Player == 0:
-            print "Error 404: Player does not exist."
-            sys.exit(0)
+        self.world = World(self, create_player=True)
+        self.player = self.world.player
         
         
         #temporary model until Worlds are finished
         self.env = loader.loadModel("models/field2.egg")
         self.env.reparentTo(render)
-        self.env.setScale(1.00,1.00,1.00)
-        self.env.setPos(0,0,0)
+        self.env.setScale(1, 1, 1)
+        self.env.setPos(0, 0, 0)
+
+        self.envCollide = loader.loadModel("models/field2.collision.egg")
+        self.envCollide.reparentTo(self.env)
+        self.envCollide.setScale(1, 1, 1)
+        self.envCollide.setPos(0, 0, 0)
+        self.envCollide.setCollideMask(BitMask32.allOn())
         
 
-        base.disableMouse()
-        base.camera.setPos(self.Player.x,self.Player.y-10,self.Player.z + 2)
+        # base.disableMouse()
+        
+        # base.camera.setPos(self.player.x,self.player.y-10,self.player.z + 2)
         ##not set to point at the player yet, direction static
         
         if DEBUG >= 1:
@@ -75,62 +97,98 @@ class App(object):
     
     def simulate(self,task):
         ##debug movement to test.
-        self.Player.x -= 0.05
-        self.Player.y += 0.009
-        self.Player.simulate()
-        
-        base.camera.setPos(self.Player.x,self.Player.y-10,self.Player.z + 2)
+        #self.player.x -= 0.05
+        #self.player.y += 0.009
+        self.player.simulate()
+
+        x, y, z = self.player.actor.getPos()
+        base.camera.setPos(x, y-10, z+2)
         
         return Task.cont
 
 
 class World(object):
     
-    Player = 0
-    Parent = 0
-    
-    def __init__(self,parent,pl):
+    def __init__(self, parent, create_player=False):
         if DEBUG == 2:
             print ".Initialising world."
-        self.Parent = parent
-        if pl == True:
-            self.Player = Player(self)
+        self.parent = parent
+        if create_player == True:
+            self.player = Player(self)
             if DEBUG == 2:
                 print "..Player created."
-            self.Parent.Player = self.Player
-            if DEBUG == 2:
-                print ".Replaced App player with created one."
         if DEBUG >= 1:
             print ".World initialised."
-
+            
 class Player(object):
-    
-    Parent = 0
-    Actor = 0
-    x = 0
-    y = 0
-    z = 0
-    direction = 0
     
     def __init__(self,parent):
         if DEBUG == 2:
             print "..Player initialising."
-        self.Parent = parent
-        self.x = 0
-        self.y = 0
-        self.z = 3
+        self.parent = parent
         self.direction = 0
-        self.Actor = Actor.Actor("models/jeff.egg")
-        self.Actor.setScale(1.0,1.0,1.0)
-        self.Actor.setPos(self.x,self.y,self.z)
-        self.Actor.reparentTo(render)
+        self.vx = 0
+        self.vy = 0
+        self.vz = 0
+        self.actor = Actor.Actor("models/jeff.egg")
+        self.actor.setScale(1, 1, 1)
+        self.actor.setPos(0, 0, 20)
+        self.actor.reparentTo(render)
+        
+        self.actor.accept("w", addTask, [self.accel, 0, SPEED])
+        self.actor.accept("w-up", removeTask, [self.accel, 0, SPEED])
+        
+        self.actor.accept("s", addTask, [self.accel, 0, -SPEED])
+        self.actor.accept("s-up", removeTask, [self.accel, 0, -SPEED])
+        
+        self.actor.accept("a", addTask, [self.accel, -SPEED, 0])
+        self.actor.accept("a-up", removeTask, [self.accel, -SPEED, 0])
+        
+        self.actor.accept("d", addTask, [self.accel, SPEED, 0])
+        self.actor.accept("d-up", removeTask, [self.accel, SPEED, 0])
+
+        cnodePath = self.actor.attachNewNode(CollisionNode('colNode'))
+        cnodePath.node().addSolid(CollisionRay(0, 0, 0, 0, 0, -1))
+        cnodePath.show()
+ 
+        lifter = CollisionHandlerFloor()
+        # lifter.setGravity(20)
+        # lifter.setOffset(14)
+        # lifter.setReach(10)
+        lifter.addCollider(cnodePath, self.actor)
+        base.cTrav.addCollider(cnodePath, lifter)
+        base.cTrav.showCollisions(render)
+        
         if DEBUG >= 1:
             print "..Player initalised."
-    
+
+    def accel(self, x=0, y=0, z=0):
+        self.vx += x
+        self.vy += y
+        self.vz += z
+
+        return Task.cont
+
+    def addTask(self, fn, *args):
+        taskMgr.add(fn,args)
+        
     def simulate(self):
-        self.Actor.setPos(self.x,self.y,self.z)
+        self.vz -= GRAVITY
+        self.vx *= FRICTION
+        self.vy *= FRICTION
 
+        if self.vx > MAX_SPEED:
+            self.vx = MAX_SPEED
+        elif self.vx < -MAX_SPEED:
+            self.vx = -MAX_SPEED
 
+        if self.vy > MAX_SPEED:
+            self.vy = MAX_SPEED
+        elif self.vy < -MAX_SPEED:
+            self.vy = -MAX_SPEED
+
+        x, y, z = self.actor.getPos()
+        self.actor.setPos(x + self.vx, y + self.vy, z + self.vz)
 
 if __name__ == '__main__':
     app = App()
