@@ -132,7 +132,7 @@ class Player(object):
         self.vz = 0
         self.actor = Actor.Actor("models/jeff.egg")
         self.actor.setScale(1, 1, 1)
-        self.actor.setPos(0, 0, 5)
+        self.actor.setPos(0, 0, 10)
         self.actor.reparentTo(render)
         
         base.accept("w", addTask, [self.accel, 0, SPEED])
