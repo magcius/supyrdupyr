@@ -45,10 +45,10 @@ DEBUG = 2
 # *   can only belong to one World at one point.
 # *   begins in the World that spawns it
 
-SPEED     = 0.02
+SPEED     = 1
 FRICTION  = 0.98
-GRAVITY   = 0.00002
-MAX_SPEED = 2
+AIR_DRAG  = 0.80
+MAX_SPEED = 10
 
 base.cTrav = CollisionTraverser()
 
@@ -132,7 +132,7 @@ class Player(object):
         self.vz = 0
         self.actor = Actor.Actor("models/jeff.egg")
         self.actor.setScale(1, 1, 1)
-        self.actor.setPos(0, 0, 20)
+        self.actor.setPos(0, 0, 5)
         self.actor.reparentTo(render)
         
         self.actor.accept("w", addTask, [self.accel, 0, SPEED])
@@ -147,16 +147,18 @@ class Player(object):
         self.actor.accept("d", addTask, [self.accel, SPEED, 0])
         self.actor.accept("d-up", removeTask, [self.accel, SPEED, 0])
 
+        self.actor.accept("space", self.jump)
+
         cnodePath = self.actor.attachNewNode(CollisionNode('colNode'))
         cnodePath.node().addSolid(CollisionRay(0, 0, 0, 0, 0, -1))
+        cnodePath.setZ(1)
         cnodePath.show()
  
-        lifter = CollisionHandlerFloor()
-        # lifter.setGravity(20)
-        # lifter.setOffset(14)
-        # lifter.setReach(10)
-        lifter.addCollider(cnodePath, self.actor)
-        base.cTrav.addCollider(cnodePath, lifter)
+        grav = self.gravity = CollisionHandlerGravity()
+        grav.setGravity(50)
+        grav.setOffset(0.1)
+        grav.addCollider(cnodePath, self.actor)
+        base.cTrav.addCollider(cnodePath, grav)
         base.cTrav.showCollisions(render)
         
         if DEBUG >= 1:
@@ -169,13 +171,15 @@ class Player(object):
 
         return Task.cont
 
-    def addTask(self, fn, *args):
-        taskMgr.add(fn,args)
+    def jump(self):
+        if not self.gravity.hasContact():
+            self.accel(z=1)
         
     def simulate(self):
-        self.vz -= GRAVITY
+        # self.vz -= GRAVITY
         self.vx *= FRICTION
         self.vy *= FRICTION
+        self.vz *= AIR_DRAG
 
         if self.vx > MAX_SPEED:
             self.vx = MAX_SPEED
@@ -188,7 +192,9 @@ class Player(object):
             self.vy = -MAX_SPEED
 
         x, y, z = self.actor.getPos()
-        self.actor.setPos(x + self.vx, y + self.vy, z + self.vz)
+        self.actor.setPos(x + self.vx * globalClock.getDt(),
+                          y + self.vy * globalClock.getDt(),
+                          z + self.vz * globalClock.getDt())
 
 if __name__ == '__main__':
     app = App()
