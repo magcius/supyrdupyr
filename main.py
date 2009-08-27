@@ -47,7 +47,7 @@ DEBUG = 2
 
 SPEED     = 1
 FRICTION  = 0.98
-AIR_DRAG  = 0.80
+AIR_DRAG  = 0.90
 MAX_SPEED = 10
 
 base.cTrav = CollisionTraverser()
@@ -155,7 +155,7 @@ class Player(object):
         cnodePath.show()
  
         grav = self.gravity = CollisionHandlerGravity()
-        grav.setGravity(50)
+        grav.setGravity(20)
         grav.setOffset(0.1)
         grav.addCollider(cnodePath, self.actor)
         base.cTrav.addCollider(cnodePath, grav)
@@ -172,8 +172,8 @@ class Player(object):
         return Task.cont
 
     def jump(self):
-        if not self.gravity.hasContact():
-            self.accel(z=1)
+        if self.gravity.hasContact():
+            self.accel(z=50)
         
     def simulate(self):
         # self.vz -= GRAVITY
