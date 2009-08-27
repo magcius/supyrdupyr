@@ -62,7 +62,7 @@ def addTask(func, *args):
     tasks[name] = taskMgr.add(func, name, extraArgs=args)
 
 def removeTask(func, *args):
-    taskMgr.remove(tasks[taskName(func, args)])
+    taskMgr.remove(taskName(func, args))
 
 
 class App(object):
@@ -135,19 +135,19 @@ class Player(object):
         self.actor.setPos(0, 0, 5)
         self.actor.reparentTo(render)
         
-        self.actor.accept("w", addTask, [self.accel, 0, SPEED])
-        self.actor.accept("w-up", removeTask, [self.accel, 0, SPEED])
+        base.accept("w", addTask, [self.accel, 0, SPEED])
+        base.accept("w-up", removeTask, [self.accel, 0, SPEED])
         
-        self.actor.accept("s", addTask, [self.accel, 0, -SPEED])
-        self.actor.accept("s-up", removeTask, [self.accel, 0, -SPEED])
+        base.accept("s", addTask, [self.accel, 0, -SPEED])
+        base.accept("s-up", removeTask, [self.accel, 0, -SPEED])
         
-        self.actor.accept("a", addTask, [self.accel, -SPEED, 0])
-        self.actor.accept("a-up", removeTask, [self.accel, -SPEED, 0])
+        base.accept("a", addTask, [self.accel, -SPEED, 0])
+        base.accept("a-up", removeTask, [self.accel, -SPEED, 0])
         
-        self.actor.accept("d", addTask, [self.accel, SPEED, 0])
-        self.actor.accept("d-up", removeTask, [self.accel, SPEED, 0])
+        base.accept("d", addTask, [self.accel, SPEED, 0])
+        base.accept("d-up", removeTask, [self.accel, SPEED, 0])
 
-        self.actor.accept("space", self.jump)
+        base.accept("space", self.jump)
 
         cnodePath = self.actor.attachNewNode(CollisionNode('colNode'))
         cnodePath.node().addSolid(CollisionRay(0, 0, 0, 0, 0, -1))
