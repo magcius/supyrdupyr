@@ -33,6 +33,9 @@ class IEntity(Interface):
     def triggerInput(value, inputName):
         pass
 
+    def simulate():
+        pass
+
 class ICollidableEntity(IEntity):
     collisionModel = Attribute("The collision model (NodePath) associated with this "
                                "entity, or, None to have the collision model be the "
@@ -42,6 +45,7 @@ class ICollidableEntity(IEntity):
     
 class IPhysicsEntity(ICollidableEntity):
     physBody = Attribute("The ODE physics body object.")
+    physMass = Attribute("The ODE physics mass object.")
 
 # class IInteractiveEntity(IEntity):
 #     triggers = Attribute("Return an iterable of ITrigger objects that define "
@@ -60,9 +64,10 @@ class StaticEntity(object):
     implements(IStaticEntity)
     
     def __init__(self, cell, name, model, kind=None):
-        self._inputs      = {}
-        self._inputValues = {}
-        self._outputs     = {}
+        self._inputs       = {}
+        self._inputValues  = {}
+        self._outputs      = {}
+        self._outputValues = {}
         
         self._cell  = cell
         self._world = cell.world
@@ -128,8 +133,9 @@ class StaticEntity(object):
         
     def triggerOutput(self, value, outputName):
         if outputName in self._outputs:
-             func, args, filter = self._outputs[outputName]
-             func(filter(value), *args)
+            self._outputValues[outputName] = value
+            func, args, filter = self._outputs[outputName]
+            func(filter(value), *args)
 
     def triggerInput(self, value, inputName):
         if inputName in self._inputs:
@@ -141,7 +147,16 @@ class StaticEntity(object):
             return self._inputValues[inputName]
         except KeyError:
             return None
-    
+
+    def getOutput(self, outputName):
+        try:
+            return self._outputValues[outputName]
+        except KeyError:
+            return None
+        
+    def simulate(self):
+        pass
+        
 class CollidableEntity(StaticEntity):
 
     implements(ICollidableEntity)
@@ -158,7 +173,7 @@ class CollidableEntity(StaticEntity):
     @collisionModel.setter
     def collisionModel(self, value):
         if value is None:
-            self.colModel = model
+            self.colModel = self._model
         else:
             self.colModel = value
         self._colModel.flattenLight()
@@ -174,6 +189,7 @@ class CollidableEntity(StaticEntity):
             self._physGeom = OdeTriMeshGeom(self._world.space, trimesh)
         else:
             self._physGeom = value
+            self._world.space.add(self._physGeom)
 
     physGeom = property(self.getPhysGeom, self.setPhysGeom)
     
@@ -193,9 +209,10 @@ class PhysicsEntity(CollidableEntity):
 
     implements(IPhysicsEntity)
     
-    def __init__(self, cell, model, name, kind=None, collisionModel=None, physGeom=None):
+    def __init__(self, cell, model, name, mass, kind=None, collisionModel=None, geom=None):
         super(PhysicsEntity, self).__init__(cell, model, name, kind, collisionModel, physGeom)
-        self._physBody = OdeBody(self._world)
+        self.physBody = OdeBody(self._world)
+        self.physMass = physMass
 
     @property
     def physBody(self):
@@ -204,6 +221,24 @@ class PhysicsEntity(CollidableEntity):
     @physBody.setter
     def physBody(self, value):
         self._physBody = value
+        if self._physMass is not None:
+            self._physBody.setMass(self._physMass)
+        self._physGeom.setBody(self._physBody)
+
+    @property
+    def physMass(self):
+        return self._physMass
+
+    @physMass.setter
+    def physMass(self, value):
+        if isinstance(value, (int, float)):
+            b1, b2 = self._model.getTightBounds()
+            wx, wy, wz = b1 - b2
+            self._physMass = OdeMass()
+            self._physMass.setBox(value, abs(wx), abs(wy), abs(wz))
+        elif isinstance(value, (OdeMass)):
+            self._physMass = value
+        self._physBody.setMass(self._physMass)
 
     def setPosition(self, x, y, z):
         self._model.setPos(x, y, z)
@@ -216,3 +251,6 @@ class PhysicsEntity(CollidableEntity):
     def setQuaternion(self, quat):
         self._model._setQuat(quat)
         self._physBody.setQuaternion(quat)
+
+    def simulate(self):
+        self._model.setPosQuat(render, self._physBody.getPosition(), Quat(self._physBody.getQuaternion()))
