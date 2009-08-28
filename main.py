@@ -75,16 +75,18 @@ class App(object):
     
     def __init__(self):
         
-        #temporary model until Worlds are finished
-        self.env = loader.loadModel("models/field2.egg")
-        self.env.reparentTo(render)
-        self.env.setScale(1, 1, 1)
-        self.env.setPos(0, 0, 0)
+        # env and envCollide are temporary
+        # Once init'ed, use self.world.model and
+        # self.world.col_model
+        env = loader.loadModel("models/field2.egg")
+        env.reparentTo(render)
+        env.setScale(1, 1, 1)
+        env.setPos(0, 0, 0)
         
-        self.envCollide = loader.loadModel("models/field2.collision.egg")
-        self.envCollide.reparentTo(self.env)
-        self.envCollide.setScale(1, 1, 1)
-        self.envCollide.setPos(0, 0, 0)
+        envCollide = loader.loadModel("models/field2.collision.egg")
+        envCollide.reparentTo(env)
+        envCollide.setScale(1, 1, 1)
+        envCollide.setPos(0, 0, 0)
 
         # Setup our physics world
         self.odeWorld = OdeWorld()
@@ -103,7 +105,7 @@ class App(object):
         
         # base.disableMouse()
         
-        self.world = World(self, create_player=True, model=self.env, col_model=self.envCollide)
+        self.world = World(self, create_player=True, model=env, col_model=envCollide)
         self.world.set_neighbours(self.world,"n")
         self.world.set_neighbours(self.world,"w")
         self.world.set_neighbours(self.world,"s")
@@ -157,10 +159,6 @@ class App(object):
         
         
     def simulate(self,task):
-        ##debug movement to test.
-        #self.player.x -= 0.05
-        #self.player.y += 0.009
-
         self.space.autoCollide()
         self.odeWorld.quickStep(globalClock.getDt())
         
