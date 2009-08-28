@@ -278,8 +278,8 @@ class Player(object):
         return Task.cont
 
     def jump(self):
-        if self.gravity.hasContact():
-            self.accel(z=50)
+#        if self.gravity.hasContact():
+#            self.accel(z=50)
         return Task.done
         
     def simulate(self):
