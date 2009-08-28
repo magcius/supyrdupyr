@@ -11,4 +11,6 @@ class World(object):
 
 class Cell(object):
     def __init__(self, terrainModel):
-        
+        self.terrainModel = terrainModel
+
+    

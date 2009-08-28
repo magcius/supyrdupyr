@@ -1,4 +1,3 @@
-
 from zope.interface import Interface, implements, Attribute
 from pandac.PandaModules import OdeBody
 
@@ -19,6 +18,21 @@ class IEntity(Interface):
     def setQuaternion(quat):
         pass
 
+    def bindOutput(outputName, inputObj, inputName, func, args, filter):
+        pass
+
+    def bindInput(inputName, outputObj, outputName, func, args, filter):
+        pass
+
+    def bindInputHandler(inputName, func):
+        pass
+    
+    def triggerOutput(value, outputName):
+        pass
+
+    def triggerInput(value, inputName):
+        pass
+
 class ICollidableEntity(IEntity):
     collisionModel = Attribute("The collision model (NodePath) associated with this "
                                "entity, or, None to have the collision model be the "
@@ -29,27 +43,27 @@ class ICollidableEntity(IEntity):
 class IPhysicsEntity(ICollidableEntity):
     physBody = Attribute("The ODE physics body object.")
 
-class IInteractiveEntity(IEntity):
-    triggers = Attribute("Return an iterable of ITrigger objects that define "
-                         "the triggers of this object, such as key presses, "
-                         "mouse clicks, entering and exiting the bounds. "
-                         "See triggers.py for a list of possible triggers.")
+# class IInteractiveEntity(IEntity):
+#     triggers = Attribute("Return an iterable of ITrigger objects that define "
+#                          "the triggers of this object, such as key presses, "
+#                          "mouse clicks, entering and exiting the bounds. "
+#                          "See triggers.py for a list of possible triggers.")
         
-    def addTrigger(trigger):
-        '''
-        Add a trigger to the trigger list.
-        '''
+#     def addTrigger(trigger):
+#         ''' Add a trigger to the trigger list. '''
 
-    def removeTrigger(trigger):
-        '''
-        Remove a trigger from the trigger list.
-        '''
+#     def removeTrigger(trigger):
+#         ''' Remove a trigger from the trigger list. '''
 
 class StaticEntity(object):
     
     implements(IStaticEntity)
     
     def __init__(self, cell, name, model, kind=None):
+        self._inputs      = {}
+        self._inputValues = {}
+        self._outputs     = {}
+        
         self._cell  = cell
         self._world = cell.world
         self._model = model
@@ -97,6 +111,36 @@ class StaticEntity(object):
     @property
     def cell(self):
         return self._cell
+
+    # Inputs/Outputs/Triggers
+    
+    def bindOutput(self, outputName, inputObj=None, inputName=None, func=None, args=None, filter=None):
+        if inputObj is not None and inputName is not None:
+            self._outputs[outputName] = (obj.triggerInput, [inputName], None)
+        elif func is not None:
+            self._outputs[outputName] = (func, args, filter)
+
+    def bindInput(self, inputName, outputObj=None, outputName=None, func=None, args=None, filter=None):
+        outputObj.bindOutput(inputName, self, outputName, func, args, filter)
+
+    def bindInputHandler(self, inputName, func):
+        self._inputs[inputName] = func
+        
+    def triggerOutput(self, value, outputName):
+        if outputName in self._outputs:
+             func, args, filter = self._outputs[outputName]
+             func(filter(value), *args)
+
+    def triggerInput(self, value, inputName):
+        if inputName in self._inputs:
+            self._inputValues[inputName] = value
+            self._inputs[inputName](value)
+
+    def getInput(self, inputName):
+        try:
+            return self._inputValues[inputName]
+        except KeyError:
+            return None
     
 class CollidableEntity(StaticEntity):
 
@@ -134,22 +178,22 @@ class CollidableEntity(StaticEntity):
     physGeom = property(self.getPhysGeom, self.setPhysGeom)
     
     def setPosition(self, x, y, z):
-        super(CollidableEntity, self).setPosition(x, y, z)
+        self._model.setPos(x, y, z)
         self._physGeom.setPosition(x, y, z)
 
     def setRotation(self, h, p, r):
-        super(CollidableEntity, self).setRotation(h, p, r)
+        self._model.setRot(h, p, r)
         self._physGeom.setRotation(h, p, r)
 
     def setQuaternion(self, quat):
-        super(CollidableEntity, self).setQuaternion(quat)
+        self._model._setQuat(quat)
         self._physGeom.setQuaternion(quat)
 
 class PhysicsEntity(CollidableEntity):
 
     implements(IPhysicsEntity)
     
-    def __init__(self, cell, model, name, kind=None, collisionModel=None, physGeom):
+    def __init__(self, cell, model, name, kind=None, collisionModel=None, physGeom=None):
         super(PhysicsEntity, self).__init__(cell, model, name, kind, collisionModel, physGeom)
         self._physBody = OdeBody(self._world)
 
@@ -160,3 +204,15 @@ class PhysicsEntity(CollidableEntity):
     @physBody.setter
     def physBody(self, value):
         self._physBody = value
+
+    def setPosition(self, x, y, z):
+        self._model.setPos(x, y, z)
+        self._physBody.setPosition(x, y, z)
+
+    def setRotation(self, h, p, r):
+        self._model.setRot(h, p, r)
+        self._physBody.setRotation(h, p, r)
+
+    def setQuaternion(self, quat):
+        self._model._setQuat(quat)
+        self._physBody.setQuaternion(quat)
