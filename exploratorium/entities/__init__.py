@@ -134,8 +134,10 @@ class StaticEntity(object):
     def triggerOutput(self, value, outputName):
         if outputName in self._outputs:
             self._outputValues[outputName] = value
-            func, args, filter = self._outputs[outputName]
-            func(filter(value), *args)
+            func, args, filt = self._outputs[outputName]
+            if callable(filt):
+                value = filt(value)
+            func(value, *tuple(args))
 
     def triggerInput(self, value, inputName):
         if inputName in self._inputs:
