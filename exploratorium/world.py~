@@ -13,10 +13,8 @@ class World(object):
         self.physSpace.setAutoCollideJointGroup(self.physContactGroup)
 
 class Cell(object):
-    def __init__(self, cell, name, model, kind=None, collisionModel=None, physGeom=None):
+    def __init__((self, cell, name, model, kind=None, collisionModel=None, physGeom=None):
         CollidableEntity.__init__(self, cell, name, model, kind, collisionModel, physGeom)
         self.terrainModel = model
         self.neighbours = { }
-    def set_neighbour(self, key, obj):
-        self.neighbours[key] = obj
     
