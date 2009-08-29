@@ -1,5 +1,5 @@
 from zope.interface import Interface, implements, Attribute
-from pandac.PandaModules import OdeBody, OdeTriMeshData, OdeTriMeshGeom, OdeMass
+from pandac.PandaModules import OdeBody
 
 class IEntity(Interface):
     name  = Attribute("The unique name associated with this entity.")
@@ -61,7 +61,7 @@ class IPhysicsEntity(ICollidableEntity):
 
 class StaticEntity(object):
     
-    implements(IEntity)
+    implements(IStaticEntity)
     
     def __init__(self, cell, name, model, kind=None):
         self._inputs       = {}
@@ -70,7 +70,7 @@ class StaticEntity(object):
         self._outputValues = {}
         
         self._cell  = cell
-        self._world = cell._world
+        self._world = cell.world
         self._model = model
         self._name  = name
         self._kind  = kind
