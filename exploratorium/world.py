@@ -21,7 +21,7 @@ class World(object):
     def addCellNeighbour(self,name,key,neighbour):
         self.cellList[name].setNeighbour(key,neighbour)
     
-    def addCellNeighbour(self,name,neighbours):
+    def addCellNeighbours(self,name,neighbours):
         self.cellList[name].setNeighbour(neighbours)
     
     def getCell(self,name):
@@ -40,11 +40,18 @@ class Cell(object):
         self._world = world
         CollidableEntity.__init__(self, cell, name, model, kind, collisionModel, physGeom)  
         self.neighbours = { }
+        self.player = -1
+    
+    def addPlayer(self, plObj):
+        self.player = plObj
+    
+    def getPlayer(self):
+        return self.player
         
     def setNeighbour(self, key, obj):
         self.neighbours[key] = obj
         
-    def setNeighbour(self, objs):
+    def setNeighbours(self, objs):
         self.neighbours = objs
     
     def getNeighbours(self):

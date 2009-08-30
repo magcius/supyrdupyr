@@ -21,7 +21,7 @@ class World(object):
     def addCellNeighbour(self,name,key,neighbour):
         self.cellList[name].setNeighbour(key,neighbour)
     
-    def addCellNeighbour(self,name,neighbours):
+    def addCellNeighbours(self,name,neighbours):
         self.cellList[name].setNeighbour(neighbours)
     
     def getCell(self,name):
@@ -44,7 +44,7 @@ class Cell(object):
     def setNeighbour(self, key, obj):
         self.neighbours[key] = obj
         
-    def setNeighbour(self, objs):
+    def setNeighbours(self, objs):
         self.neighbours = objs
     
     def getNeighbours(self):

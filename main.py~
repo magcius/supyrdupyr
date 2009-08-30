@@ -159,10 +159,6 @@ class App(object):
         
         
     def simulate(self,task):
-        ##debug movement to test.
-        #self.player.x -= 0.05
-        #self.player.y += 0.009
-
         self.space.autoCollide()
         self.odeWorld.quickStep(globalClock.getDt())
         
