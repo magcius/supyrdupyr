@@ -1,68 +1,13 @@
 # from zope.interface import Interface, implements, Attribute
-from pandac.PandaModules import NodePath, OdeBody, OdeTriMeshData, OdeTriMeshGeom, OdeMass, BitMask32
+from pandac.PandaModules import NodePath, OdeBody, OdeTriMeshData, OdeTriMeshGeom, OdeMass, BitMask32, Quat
 from direct.showbase.DirectObject import DirectObject
+from exploratorium.util import geomId
 
-# class IEntity(Interface):
-#     name  = Attribute("The unique name associated with this entity.")
-#     kind  = Attribute("The kind of entity this is. Kinds are application-specific.")
-#     model = Attribute("The model (NodePath) associated with this entity.")
-#     data  = Attribute("Extra data associated with this entity.")
-#     cell  = Attribute("The cell this entity is in.")
-#     world = Attribute("The world this entity is in.")
-
-#     def setPosition(x, y, z):
-#         pass
-
-#     def setRotation(h, p, r):
-#         pass
-
-#     def setQuaternion(quat):
-#         pass
-
-#     def bindOutput(outputName, inputObj, inputName, func, args, filter):
-#         pass
-
-#     def bindInput(inputName, outputObj, outputName, func, args, filter):
-#         pass
-
-#     def bindInputHandler(inputName, func):
-#         pass
-    
-#     def triggerOutput(value, outputName):
-#         pass
-
-#     def triggerInput(value, inputName):
-#         pass
-
-#     def simulate():
-#         pass
-
-# class ICollidableEntity(IEntity):
-#     collisionModel = Attribute("The collision model (NodePath) associated with this "
-#                                "entity, or, None to have the collision model be the "
-#                                "same as the visible model.")
-#     physGeom       = Attribute("The ODE physics geometry. Leave None to have a "
-#                                "TriMesh generated at constructor time.")
-    
-# class IPhysicsEntity(ICollidableEntity):
-#     physBody = Attribute("The ODE physics body object.")
-#     physMass = Attribute("The ODE physics mass object.")
-
-# # class IInteractiveEntity(IEntity):
-# #     triggers = Attribute("Return an iterable of ITrigger objects that define "
-# #                          "the triggers of this object, such as key presses, "
-# #                          "mouse clicks, entering and exiting the bounds. "
-# #                          "See triggers.py for a list of possible triggers.")
-        
-# #     def addTrigger(trigger):
-# #         ''' Add a trigger to the trigger list. '''
-
-# #     def removeTrigger(trigger):
-# #         ''' Remove a trigger from the trigger list. '''
+import os.path
 
 geomToEnt = {}
 
-class StaticEntity(object, DirectObject):
+class StaticEntity(object):
     
     # implements(IEntity)
     
@@ -97,7 +42,7 @@ class StaticEntity(object, DirectObject):
     @model.setter
     def model(self, value):
         if isinstance(value, basestring):
-            self._model = NodePath(value)
+            self._model = loader.loadModel(os.path.join(MODELS_DIR, value))
             self._model.setPos(0, 0, 0)
             self._model.setScale(1, 1, 1)
         else:
@@ -143,6 +88,8 @@ class StaticEntity(object, DirectObject):
     @cell.setter
     def cell(self, value):
         if self._cell != value:
+            messenger.send("leave cell: '%s'" % self._cell.name, [value])
+            messenger.send("enter cell: '%s'" % value.name, [self._cell])
             del self._cell.entities[self.name]
             self._cell = value
             self._cell.addEntity(self)
@@ -227,16 +174,16 @@ class CollidableEntity(StaticEntity):
             self._physGeom = OdeTriMeshGeom(self._world.physSpace, trimesh)
         else:
             self._physGeom = value
-            self._world.physSpace.add(self._physGeom)
-            
+        
         self._physGeom.setCollideBits (BitMask32.allOn())
         self._physGeom.setCategoryBits(BitMask32.allOn())
-        
-        geomToEnt[self._physGeom] = self
-    
+
+        geomToEnt[geomId(self._physGeom)] = self
+
     def setPosition(self, x, y, z):
         self._model.setPos(x, y, z)
-        self._physGeom.setPosition(x, y, z)
+        print "Setting GEOM position: %d %d %d" % (self._model.getX(render), self._model.getY(render), self._model.getZ(render))
+        self._physGeom.setPosition(self._model.getX(render), self._model.getY(render), self._model.getZ(render))
 
     def setRotation(self, h, p, r):
         self._model.setRot(h, p, r)
@@ -247,9 +194,9 @@ class CollidableEntity(StaticEntity):
         self._physGeom.setQuaternion(quat)
 
 class PhysicsEntity(CollidableEntity):
-
-    # implements(IPhysicsEntity)
+    
     _physMass = None
+    _physBody = None
     
     def __init__(self, cell, name, model, mass, tags=None, collisionModel=None, physGeom=None):
         CollidableEntity.__init__(self, cell, name, model, tags, collisionModel, physGeom)
@@ -257,12 +204,24 @@ class PhysicsEntity(CollidableEntity):
         self.physMass = mass
 
     @property
+    def physGeom(self):
+        return CollidableEntity.physGeom.fget(self)
+    
+    @physGeom.setter
+    def physGeom(self, value):
+        CollidableEntity.physGeom.fset(self, value)
+        if self._physBody is not None:
+            self._physGeom.setBody(self._physBody)
+    
+    @property
     def physBody(self):
         return self._physBody
 
     @physBody.setter
     def physBody(self, value):
         self._physBody = value
+        self._physBody.setPosition(self._model.getPos(render))
+        self._physBody.setQuaternion(self._model.getQuat(render))
         if self._physMass is not None:
             self._physBody.setMass(self._physMass)
         self._physGeom.setBody(self._physBody)
@@ -284,7 +243,8 @@ class PhysicsEntity(CollidableEntity):
 
     def setPosition(self, x, y, z):
         self._model.setPos(x, y, z)
-        self._physBody.setPosition(x, y, z)
+        print "Setting PHYS position: %d %d %d" % (self._model.getX(render), self._model.getY(render), self._model.getZ(render))
+        self._physBody.setPosition(self._model.getX(render), self._model.getY(render), self._model.getZ(render))
 
     def setRotation(self, h, p, r):
         self._model.setRot(h, p, r)
@@ -295,4 +255,6 @@ class PhysicsEntity(CollidableEntity):
         self._physBody.setQuaternion(quat)
 
     def simulate(self):
-        self._model.setPosQuat(render, self._physBody.getPosition(), Quat(self._physBody.getQuaternion()))
+        pos = self._physBody.getPosition()
+        quat = Quat(self._physBody.getQuaternion())
+        self._model.setPosQuat(render, pos, quat)

@@ -7,3 +7,7 @@ def diagonal(L, offset=0):
             SL = L[i]
             if i < len(SL):
                 yield SL[i]
+
+
+def geomId(geom):
+    return str(geom).split()[2][:-1]

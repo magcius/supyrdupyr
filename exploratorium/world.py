@@ -1,7 +1,7 @@
 
-from pandac.PandaModules import OdeWorld, OdeSimpleSpace, OdeJointGroup
+from pandac.PandaModules import OdeWorld, OdeSimpleSpace, OdeJointGroup, OdeUtil
 from exploratorium.entities import CollidableEntity, geomToEnt
-from exploratorium.util import diagonal
+from exploratorium.util import diagonal, geomId
 
 CELL_SIZE = 512
 
@@ -9,10 +9,10 @@ class World(object):
 
     def __init__(self):
         self.physWorld = OdeWorld()
-        self.physWorld.setGravity(0, 0, -9.81)
+        self.physWorld.setGravity(0, 0, -15)
         
         self.physWorld.initSurfaceTable(1)
-        self.physWorld.setSurfaceEntry(0, 0, 150, 0.0, 9.1, 0.9, 0.00001, 0.0, 0.002)
+        self.physWorld.setSurfaceEntry(0, 0, 1, 0.0, 0, 0.9, 0.00001, 0.0, 1)
         
         self.physSpace = OdeSimpleSpace()
         self.physContactGroup = OdeJointGroup()
@@ -23,12 +23,12 @@ class World(object):
         self.physSpace.setAutoCollideWorld(self.physWorld)
         self.physSpace.setAutoCollideJointGroup(self.physContactGroup)
         
-        self.cellList = {}
+        self.cells = {}
         self.allEntities = {}
 
     def _collided(self, collision):
-        ent1 = geomToEnt[collision.getGeom1()]
-        ent2 = geomToEnt[collision.getGeom2()]
+        ent1 = geomToEnt[geomId(collision.getGeom1())]
+        ent2 = geomToEnt[geomId(collision.getGeom2())]
         messenger.send("collided: '%s' '%s'" % (ent1.name, ent2.name))
         messenger.send("collided: '%s' '%s'" % (ent2.name, ent1.name))
 
@@ -47,25 +47,23 @@ class World(object):
     def _updateWorld(self):
         self.physSpace.autoCollide()
         self.physWorld.quickStep(globalClock.getDt())
-
-        for cell in self.cells:
+        for cell in self.cells.itervalues():
             cell.simulate()
-
-        self.contactgroup.empty()
+        self.physContactGroup.empty()
     
     def addCell(self, cell):
-        self.cellList[cell.name] = cell
+        self.cells[cell.name] = cell
         cell.model.reparentTo(render)
     
     def getCell(self, name):
-        return self.cellList[name]
+        return self.cells[name]
     
     def getCellNeighbours(self, name):
-        return self.cellList[name].getNeighbours()
+        return self.cells[name].getNeighbours()
 
     @property
     def root(self):
-        return self.cellList['root']
+        return self.cells['root']
 
 class Cell(CollidableEntity):
     def __init__(self, world, name, model, kind=None, collisionModel=None, physGeom=None):
@@ -73,6 +71,10 @@ class Cell(CollidableEntity):
         self.neighbours = {}
         self.entities   = {}
         CollidableEntity.__init__(self, self, name, model, "cell static terrain %s" % (kind,), collisionModel, physGeom)
+        base.accept("leave cell: '%s'" % name, self.left)
+        base.accept("enter cell: '%s'" % name, self.entered)
+        self._model.setTransparency(1)
+        self._model.clearColor()
         
     def setNeighbour(self, key, obj):
         self.neighbours[key] = obj
@@ -85,9 +87,24 @@ class Cell(CollidableEntity):
         ent.model.reparentTo(self._model)
     
     def simulate(self):
-        for ent in self.entities:
+        for ent in self.entities.itervalues():
             ent.simulate()
 
+    def show(self):
+        self._model.setAlphaScale(1)
+        for cell in self.neighbours.itervalues():
+            cell.model.setAlphaScale(0.75)
+
+    def hide(self):
+        self._model.setAlphaScale(0.25)
+        for cell in self.neighbours.itervalues():
+            cell.model.setAlphaScale(0.25)
+    
+    def entered(self, otherCell):
+        self.show()
+
+    def left(self, otherCell):
+        self.hide()
 
 def makeWorld(cellMap):
     w = World()
@@ -101,6 +118,7 @@ def makeWorld(cellMap):
             else:
                 cell = i(w, "cell %d:%d" % (x, y))
             cell.setPosition(x * CELL_SIZE, y * CELL_SIZE, 0)
+            cell.hide()
             w.addCell(cell)
             t.append(cell)
     assignNeighbours(L)
@@ -134,12 +152,15 @@ def assignNeighbours(cellMap):
             northeast.setNeighbour("sw", southwest)
             southwest.setNeighbour("ne", northeast)
 
+    print "END OF assignNeighbours"
+
 from exploratorium.levels.root import DevCell
 
 d = DevCell
 
 world = makeWorld(
-[[d, d,    d],
- [d, (d,), d],
- [d, d,    d]]
+[[d, d, d, d],
+ [d, d, d, d],
+ [d, d, d, d],
+ [d, d, d, (d,)]]
 )
