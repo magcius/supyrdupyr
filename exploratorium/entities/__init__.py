@@ -1,69 +1,72 @@
-from zope.interface import Interface, implements, Attribute
-from pandac.PandaModules import OdeBody, OdeTriMeshData, OdeTriMeshGeom, OdeMass
+# from zope.interface import Interface, implements, Attribute
+from pandac.PandaModules import NodePath, OdeBody, OdeTriMeshData, OdeTriMeshGeom, OdeMass, BitMask32
+from direct.showbase.DirectObject import DirectObject
 
-class IEntity(Interface):
-    name  = Attribute("The unique name associated with this entity.")
-    kind  = Attribute("The kind of entity this is. Kinds are application-specific.")
-    model = Attribute("The model (NodePath) associated with this entity.")
-    data  = Attribute("Extra data associated with this entity.")
-    cell  = Attribute("The cell this entity is in.")
-    world = Attribute("The world this entity is in.")
+# class IEntity(Interface):
+#     name  = Attribute("The unique name associated with this entity.")
+#     kind  = Attribute("The kind of entity this is. Kinds are application-specific.")
+#     model = Attribute("The model (NodePath) associated with this entity.")
+#     data  = Attribute("Extra data associated with this entity.")
+#     cell  = Attribute("The cell this entity is in.")
+#     world = Attribute("The world this entity is in.")
 
-    def setPosition(x, y, z):
-        pass
+#     def setPosition(x, y, z):
+#         pass
 
-    def setRotation(h, p, r):
-        pass
+#     def setRotation(h, p, r):
+#         pass
 
-    def setQuaternion(quat):
-        pass
+#     def setQuaternion(quat):
+#         pass
 
-    def bindOutput(outputName, inputObj, inputName, func, args, filter):
-        pass
+#     def bindOutput(outputName, inputObj, inputName, func, args, filter):
+#         pass
 
-    def bindInput(inputName, outputObj, outputName, func, args, filter):
-        pass
+#     def bindInput(inputName, outputObj, outputName, func, args, filter):
+#         pass
 
-    def bindInputHandler(inputName, func):
-        pass
+#     def bindInputHandler(inputName, func):
+#         pass
     
-    def triggerOutput(value, outputName):
-        pass
+#     def triggerOutput(value, outputName):
+#         pass
 
-    def triggerInput(value, inputName):
-        pass
+#     def triggerInput(value, inputName):
+#         pass
 
-    def simulate():
-        pass
+#     def simulate():
+#         pass
 
-class ICollidableEntity(IEntity):
-    collisionModel = Attribute("The collision model (NodePath) associated with this "
-                               "entity, or, None to have the collision model be the "
-                               "same as the visible model.")
-    physGeom       = Attribute("The ODE physics geometry. Leave None to have a "
-                               "TriMesh generated at constructor time.")
+# class ICollidableEntity(IEntity):
+#     collisionModel = Attribute("The collision model (NodePath) associated with this "
+#                                "entity, or, None to have the collision model be the "
+#                                "same as the visible model.")
+#     physGeom       = Attribute("The ODE physics geometry. Leave None to have a "
+#                                "TriMesh generated at constructor time.")
     
-class IPhysicsEntity(ICollidableEntity):
-    physBody = Attribute("The ODE physics body object.")
-    physMass = Attribute("The ODE physics mass object.")
+# class IPhysicsEntity(ICollidableEntity):
+#     physBody = Attribute("The ODE physics body object.")
+#     physMass = Attribute("The ODE physics mass object.")
 
-# class IInteractiveEntity(IEntity):
-#     triggers = Attribute("Return an iterable of ITrigger objects that define "
-#                          "the triggers of this object, such as key presses, "
-#                          "mouse clicks, entering and exiting the bounds. "
-#                          "See triggers.py for a list of possible triggers.")
+# # class IInteractiveEntity(IEntity):
+# #     triggers = Attribute("Return an iterable of ITrigger objects that define "
+# #                          "the triggers of this object, such as key presses, "
+# #                          "mouse clicks, entering and exiting the bounds. "
+# #                          "See triggers.py for a list of possible triggers.")
         
-#     def addTrigger(trigger):
-#         ''' Add a trigger to the trigger list. '''
+# #     def addTrigger(trigger):
+# #         ''' Add a trigger to the trigger list. '''
 
-#     def removeTrigger(trigger):
-#         ''' Remove a trigger from the trigger list. '''
+# #     def removeTrigger(trigger):
+# #         ''' Remove a trigger from the trigger list. '''
 
-class StaticEntity(object):
+geomToEnt = {}
+
+class StaticEntity(object, DirectObject):
     
-    implements(IEntity)
+    # implements(IEntity)
     
-    def __init__(self, cell, name, model, kind=None):
+    def __init__(self, cell, name, model, tags=None):
         self._inputs       = {}
         self._inputValues  = {}
         self._outputs      = {}
@@ -71,11 +74,14 @@ class StaticEntity(object):
         
         self._cell  = cell
         self._world = cell._world
-        self._model = model
-        self._name  = name
-        self._kind  = kind
         self._data  = None
+        self._name  = name
+        
+        self.model  = model
+        self.tags   = "all * " + tags
 
+        self._cell.addEntity(self)
+        
     @property
     def data(self):
         return self._data
@@ -90,15 +96,32 @@ class StaticEntity(object):
 
     @model.setter
     def model(self, value):
-        self._model = value
+        if isinstance(value, basestring):
+            self._model = NodePath(value)
+            self._model.setPos(0, 0, 0)
+            self._model.setScale(1, 1, 1)
+        else:
+            self._model = value
+            
+        if self._cell == self:
+            self._model.reparentTo(render)
+        else:
+            self._model.reparentTo(self._cell.model)
 
     @property
-    def kind(self):
-        return self._kind
+    def name(self):
+        return self._name
+    
+    @property
+    def tags(self):
+        return self._tags
 
-    @kind.setter
-    def kind(self, value):
-        self._kind = value
+    @tags.setter
+    def tags(self, value):
+        if isinstance(value, basestring):
+            self._tags = value.split()
+        else:
+            self._tags = list(value)
         
     def setPosition(self, x, y, z):
         self._model.setPos(x, y, z)
@@ -117,6 +140,13 @@ class StaticEntity(object):
     def cell(self):
         return self._cell
 
+    @cell.setter
+    def cell(self, value):
+        if self._cell != value:
+            del self._cell.entities[self.name]
+            self._cell = value
+            self._cell.addEntity(self)
+    
     # Inputs/Outputs/Triggers
     
     def bindOutput(self, outputName, inputObj=None, inputName=None, func=None, args=None, filter=None):
@@ -161,10 +191,10 @@ class StaticEntity(object):
         
 class CollidableEntity(StaticEntity):
 
-    implements(ICollidableEntity)
+    # implements(ICollidableEntity)
     
-    def __init__(self, cell, name, model, kind=None, collisionModel=None, physGeom=None):
-        super(CollidableEntity, self).__init__(world, model, name, kind)
+    def __init__(self, cell, name, model, tags=None, collisionModel=None, physGeom=None):
+        StaticEntity.__init__(self, cell, name, model, tags)
         self.collisionModel = collisionModel
         self.physGeom       = physGeom
 
@@ -175,25 +205,34 @@ class CollidableEntity(StaticEntity):
     @collisionModel.setter
     def collisionModel(self, value):
         if value is None:
-            self.colModel = self._model
+            self._colModel = self._model
         else:
-            self.colModel = value
+            if isinstance(value, basestring):
+                self._colModel = NodePath(value)
+                self._colModel.setPos(0, 0, 0)
+                self._colModel.setScale(1, 1, 1)
+            else:
+                self.colModel = value
+            self._colModel.reparentTo(self._model)
         self._colModel.flattenLight()
 
     @property
     def physGeom(self):
         return self._physGeom
 
-    @property
+    @physGeom.setter
     def physGeom(self, value):
         if value is None:
             trimesh = OdeTriMeshData(self._colModel, True)
-            self._physGeom = OdeTriMeshGeom(self._world.space, trimesh)
+            self._physGeom = OdeTriMeshGeom(self._world.physSpace, trimesh)
         else:
             self._physGeom = value
-            self._world.space.add(self._physGeom)
-
-    physGeom = property(self.getPhysGeom, self.setPhysGeom)
+            self._world.physSpace.add(self._physGeom)
+            
+        self._physGeom.setCollideBits (BitMask32.allOn())
+        self._physGeom.setCategoryBits(BitMask32.allOn())
+        
+        geomToEnt[self._physGeom] = self
     
     def setPosition(self, x, y, z):
         self._model.setPos(x, y, z)
@@ -209,12 +248,13 @@ class CollidableEntity(StaticEntity):
 
 class PhysicsEntity(CollidableEntity):
 
-    implements(IPhysicsEntity)
+    # implements(IPhysicsEntity)
+    _physMass = None
     
-    def __init__(self, cell, model, name, mass, kind=None, collisionModel=None, geom=None):
-        super(PhysicsEntity, self).__init__(cell, model, name, kind, collisionModel, physGeom)
-        self.physBody = OdeBody(self._world)
-        self.physMass = physMass
+    def __init__(self, cell, name, model, mass, tags=None, collisionModel=None, physGeom=None):
+        CollidableEntity.__init__(self, cell, name, model, tags, collisionModel, physGeom)
+        self.physBody = OdeBody(self._world.physWorld)
+        self.physMass = mass
 
     @property
     def physBody(self):
