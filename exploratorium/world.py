@@ -3,11 +3,12 @@ from pandac.PandaModules import OdeWorld, OdeSimpleSpace, OdeJointGroup, OdeUtil
 from exploratorium.entities import CollidableEntity, geomToEnt
 from exploratorium.util import diagonal, geomId
 
-CELL_SIZE = 512
-
 class World(object):
 
     def __init__(self):
+        self.physAccum = 0
+        self.physStep  = 1. / 90
+        
         self.physWorld = OdeWorld()
         self.physWorld.setGravity(0, 0, -15)
         
@@ -43,12 +44,19 @@ class World(object):
         for tag in ent2.tags:
             messenger.send("collided: [%s] '%s'" % (tag, ent1.name), [ent2, ent1])
             messenger.send("collided: '%s' [%s]" % (ent1.name, tag), [ent1, ent2])
-
+    
     def _updateWorld(self):
         self.physSpace.autoCollide()
-        self.physWorld.quickStep(globalClock.getDt())
+
+        self.physAccum += globalClock.getDt()
+        
+        while self.physAccum > self.physStep:
+            self.physAccum -= self.physStep
+            self.physWorld.quickStep(self.physStep)
+            
         for cell in self.cells.itervalues():
             cell.simulate()
+
         self.physContactGroup.empty()
     
     def addCell(self, cell):
@@ -106,7 +114,7 @@ class Cell(CollidableEntity):
     def left(self, otherCell):
         self.hide()
 
-def makeWorld(cellMap):
+def makeWorld(cellMap, cellSize=512):
     w = World()
     L = []
     for y, row in enumerate(cellMap):
@@ -117,7 +125,7 @@ def makeWorld(cellMap):
                 cell = i[0](w, "root")
             else:
                 cell = i(w, "cell %d:%d" % (x, y))
-            cell.setPosition(x * CELL_SIZE, y * CELL_SIZE, 0)
+            cell.setPosition(x * cellSize, y * cellSize, 0)
             cell.hide()
             w.addCell(cell)
             t.append(cell)

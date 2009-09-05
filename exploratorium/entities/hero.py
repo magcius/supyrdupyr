@@ -3,8 +3,8 @@ from exploratorium.entities import PhysicsEntity
 
 SPEED = 10
 JUMP_FORCE = 10
-MAX_SLOW_SPEED = 50
-MAX_FAST_SPEED = 1000
+MAX_SLOW_SPEED = 100
+MAX_FAST_SPEED = 2000
 
 class Hero(PhysicsEntity):
     
@@ -13,6 +13,7 @@ class Hero(PhysicsEntity):
         PhysicsEntity.__init__(self, cell, "hero", "jeff.egg", 10, "physics hero")
 
         self.physGeom = OdeCylinderGeom(self._world.physSpace, 0.125, 2)
+        self._model.setColor(0, 0, 0)
         
         base.accept("collided: [hero] [*]",    self._collidedWithAnything)
         base.accept("collided: [hero] [cell]", self._collidedWithCell)
@@ -57,9 +58,11 @@ class Hero(PhysicsEntity):
             self.canJump = False
 
     def simulate(self):
+        self._model.setHpr(0, 0, 0)
+        
         self.physBody.setAngularVel(0, 0, 0)
-        self.physBody.setRotation(Mat3.identMat())
-
+        self.physBody.setQuaternion(self._model.getQuat())
+        
         x, y, z = self.physBody.getLinearVel()
         speed = x*x + y*y
         if speed > self.currentMaxSpeed:

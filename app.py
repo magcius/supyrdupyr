@@ -21,10 +21,12 @@ world = M_world.world
 hero = M_hero.Hero(world.root)
 rootModel = world.root.model
 world.root.show()
-hero.setPosition(0, 0, 30)
+hero.setPosition(0, 0, 10)
 
 base.buttonThrowers[0].node().setModifierButtons(ModifierButtons())
 
-taskMgr.add(tick, "enter frame task")
+render.prepareScene(base.win.getGsg())
+
+taskMgr.doMethodLater(0.5, tick, "enter frame task")
 
 run()
