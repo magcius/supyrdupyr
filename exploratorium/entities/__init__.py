@@ -1,11 +1,33 @@
 # from zope.interface import Interface, implements, Attribute
 from pandac.PandaModules import NodePath, OdeBody, OdeTriMeshData, OdeTriMeshGeom, OdeMass, BitMask32, Quat
-from direct.showbase.DirectObject import DirectObject
 from exploratorium.util import geomId
 
 import os.path
+import itertools
 
 geomToEnt = {}
+tagRegistry = {}
+
+def getTagBits(tags):
+    bits = 0
+    notBits = False
+    if not tags:
+        return BitMask32.allOn()
+    
+    if all(tag[0] == "!" for tag in tags):
+        tags = [tag[1:] for tag in tags]
+        notBits = True
+        
+    for tag in tags:
+        if tag not in ("all", "*"):
+            tagRegistry.setdefault(tag, len(tagRegistry))
+            index = tagRegistry[tag]
+            bits |= 1 << index
+    
+    if notBits:
+        bits = ~bits
+    
+    return BitMask32(bits)
 
 class StaticEntity(object):
     
@@ -26,7 +48,13 @@ class StaticEntity(object):
         self.tags   = "all * " + tags
 
         self._cell.addEntity(self)
-        
+
+    def sendEntityEvent(self, eventtype, entities, withTags=True):
+        for ents in itertools.permutations(entities):
+            permu = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
+            for enttags in itertools.product(permu):
+                base.send("%s: %s" % (eventtype, entities))
+    
     @property
     def data(self):
         return self._data
@@ -88,8 +116,7 @@ class StaticEntity(object):
     @cell.setter
     def cell(self, value):
         if self._cell != value:
-            messenger.send("leave cell: '%s'" % self._cell.name, [value])
-            messenger.send("enter cell: '%s'" % value.name, [self._cell])
+            self.sendEntityEvent("change cell", [self._cell, value])
             del self._cell.entities[self.name]
             self._cell = value
             self._cell.addEntity(self)
@@ -140,8 +167,9 @@ class CollidableEntity(StaticEntity):
 
     # implements(ICollidableEntity)
     
-    def __init__(self, cell, name, model, tags=None, collisionModel=None, physGeom=None):
+    def __init__(self, cell, name, model, tags=None, collisionModel=None, collisionTags=None, physGeom=None):
         StaticEntity.__init__(self, cell, name, model, tags)
+        self.collisionTags  = collisionTags
         self.collisionModel = collisionModel
         self.physGeom       = physGeom
 
@@ -174,10 +202,9 @@ class CollidableEntity(StaticEntity):
             self._physGeom = OdeTriMeshGeom(self._world.physSpace, trimesh)
         else:
             self._physGeom = value
-        
-        self._physGeom.setCollideBits (BitMask32.allOn())
-        self._physGeom.setCategoryBits(BitMask32.allOn())
-
+            
+        self._physGeom.setCollideBits(getTagBits(self.collisionTags))
+        self._physGeom.setCategoryBits(getTagBits(self.tags))
         geomToEnt[geomId(self._physGeom)] = self
 
     def setPosition(self, x, y, z):

@@ -2,7 +2,6 @@
 
 import direct.directbase.DirectStart
 
-from pandac.PandaModules import ModifierButtons
 from direct.task import Task
 
 import os.path
@@ -23,7 +22,9 @@ rootModel = world.root.model
 world.root.show()
 hero.setPosition(0, 0, 10)
 
-base.buttonThrowers[0].node().setModifierButtons(ModifierButtons())
+base.setFrameRateMeter(True)
+
+# base.buttonThrowers[0].node().setModifierButtons(ModifierButtons())
 
 render.prepareScene(base.win.getGsg())
 

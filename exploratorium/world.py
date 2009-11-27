@@ -7,7 +7,7 @@ class World(object):
 
     def __init__(self):
         self.physAccum = 0
-        self.physStep  = 1. / 90
+        self.physStep  = 1. / 60
         
         self.physWorld = OdeWorld()
         self.physWorld.setGravity(0, 0, -15)
@@ -30,34 +30,21 @@ class World(object):
     def _collided(self, collision):
         ent1 = geomToEnt[geomId(collision.getGeom1())]
         ent2 = geomToEnt[geomId(collision.getGeom2())]
-        messenger.send("collided: '%s' '%s'" % (ent1.name, ent2.name))
-        messenger.send("collided: '%s' '%s'" % (ent2.name, ent1.name))
-
-        for tag in ent1.tags:
-            for tag2 in ent2.tags:
-                messenger.send("collided: [%s] [%s]" % (tag, tag2), [ent1, ent2])
-                messenger.send("collided: [%s] [%s]" % (tag2, tag), [ent2, ent1])
-                
-            messenger.send("collided: [%s] '%s'" % (tag, ent2.name), [ent1, ent2])
-            messenger.send("collided: '%s' [%s]" % (ent2.name, tag), [ent2, ent1])
-
-        for tag in ent2.tags:
-            messenger.send("collided: [%s] '%s'" % (tag, ent1.name), [ent2, ent1])
-            messenger.send("collided: '%s' [%s]" % (ent1.name, tag), [ent1, ent2])
+        ent1.sendEntityEvent("collided", ent2)
+        ent2.sendEntityEvent("collided", ent1)
     
     def _updateWorld(self):
-        self.physSpace.autoCollide()
 
-        self.physAccum += globalClock.getDt()
+        dt = globalClock.getDt()
+        self.physAccum += dt
         
-        while self.physAccum > self.physStep:
-            self.physAccum -= self.physStep
-            self.physWorld.quickStep(self.physStep)
-            
+        #while self.physAccum > self.physStep:
+        self.physSpace.autoCollide()
+        self.physWorld.quickStep(self.physStep)
+        self.physContactGroup.empty()
+
         for cell in self.cells.itervalues():
             cell.simulate()
-
-        self.physContactGroup.empty()
     
     def addCell(self, cell):
         self.cells[cell.name] = cell
@@ -74,13 +61,13 @@ class World(object):
         return self.cells['root']
 
 class Cell(CollidableEntity):
-    def __init__(self, world, name, model, kind=None, collisionModel=None, physGeom=None):
+    def __init__(self, world, name, model, tags=None, collisionModel=None, collisionTags=None, physGeom=None):
         self._world = world
         self.neighbours = {}
         self.entities   = {}
-        CollidableEntity.__init__(self, self, name, model, "cell static terrain %s" % (kind,), collisionModel, physGeom)
-        base.accept("leave cell: '%s'" % name, self.left)
-        base.accept("enter cell: '%s'" % name, self.entered)
+        CollidableEntity.__init__(self, self, name, model, "cell static terrain" + tags, collisionModel, collisionTags or "!static", physGeom)
+        base.accept("change cell: [hero] '%s' [*]" % name, self.left)
+        base.accept("change cell: [hero] [*] '%s'" % name, self.entered)
         self._model.setTransparency(1)
         self._model.clearColor()
         
