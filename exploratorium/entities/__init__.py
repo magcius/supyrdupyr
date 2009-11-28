@@ -52,10 +52,12 @@ class StaticEntity(object):
 
     def sendEntityEvent(self, eventtype, *entities, **kwargs):
         withTags = kwargs.get('withTags', True)
-        for ents in itertools.permutations(entities):
-            permu = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
-            for enttags in itertools.product(*permu):
-                messenger.send("%s: %s" % (eventtype, ' '.join(enttags)), list(entities))
+        permute  = kwargs.get('permute', False)
+        loop = itertools.permutations(entities) if permute else [entities]
+        for ents in loop:
+            ents = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
+            for enttags in itertools.product(*ents):
+                messenger.send("%s: %s" % (eventtype, ' '.join(enttags)), [self] + list(ents))
     
     @property
     def data(self):

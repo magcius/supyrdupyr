@@ -5,15 +5,16 @@ import direct.directbase.DirectStart
 from direct.task import Task
 
 import os.path
+import __builtin__
 
-__builtins__.BASE_DIR   = os.path.abspath(os.path.dirname(__file__))
-__builtins__.MODELS_DIR = os.path.join(BASE_DIR, "models")
+__builtin__.BASE_DIR   = os.path.abspath(os.path.dirname(__file__))
+__builtin__.MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 from exploratorium import world as M_world
 from exploratorium.entities import hero as M_hero
 
 def tick(self):
-    messenger.send("enter frame")
+    world.updateWorld()
     return Task.cont
 
 world = M_world.world

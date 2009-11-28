@@ -20,7 +20,6 @@ class World(object):
 
         self.physSpace.setCollisionEvent("internal: collided")
         base.accept("internal: collided", self._collided)
-        base.accept("enter frame", self._updateWorld)
         self.physSpace.setAutoCollideWorld(self.physWorld)
         self.physSpace.setAutoCollideJointGroup(self.physContactGroup)
         
@@ -30,11 +29,10 @@ class World(object):
     def _collided(self, collision):
         ent1 = geomToEnt[geomId(collision.getGeom1())]
         ent2 = geomToEnt[geomId(collision.getGeom2())]
-        ent1.sendEntityEvent("collided", ent2)
-        ent2.sendEntityEvent("collided", ent1)
+        ent1.sendEntityEvent("collided", ent2, permute=True)
+        ent2.sendEntityEvent("collided", ent1, permute=True)
     
-    def _updateWorld(self):
-
+    def updateWorld(self):
         dt = globalClock.getDt()
         self.physAccum += dt
         
@@ -44,8 +42,8 @@ class World(object):
             self.physWorld.quickStep(self.physStep)
             self.physContactGroup.empty()
 
-            for cell in self.cells.itervalues():
-                cell.simulate()
+        for cell in self.cells.itervalues():
+            cell.simulate()
     
     def addCell(self, cell):
         self.cells[cell.name] = cell
@@ -87,19 +85,21 @@ class Cell(CollidableEntity):
             ent.simulate()
 
     def show(self):
-        self._model.setAlphaScale(1)
+        self.model.setAlphaScale(1)
         for cell in self.neighbours.itervalues():
             cell.model.setAlphaScale(0.75)
 
     def hide(self):
-        self._model.setAlphaScale(0.25)
+        self.model.setAlphaScale(0.25)
         for cell in self.neighbours.itervalues():
             cell.model.setAlphaScale(0.25)
     
-    def entered(self, otherCell):
+    def entered(self, _, __, ___):
+        print "showing", self.name
         self.show()
-
-    def left(self, otherCell):
+        
+    def left(self, _, __, ___):
+        print "hiding", self.name
         self.hide()
 
 def makeWorld(cellMap, cellSize=512):

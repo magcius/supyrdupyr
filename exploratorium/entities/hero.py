@@ -40,10 +40,10 @@ class Hero(PhysicsEntity):
         self.tasks = []
         self.currentMaxSpeed = MAX_SLOW_SPEED
     
-    def _collidedWithAnything(self, other):
+    def _collidedWithAnything(self, _, other):
         self.canJump = True
     
-    def _collidedWithCell(self, cell):
+    def _collidedWithCell(self, _, cell):
         self.cell = cell
     
     def setMaxSpeed(self, speed):
