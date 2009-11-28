@@ -1,5 +1,5 @@
-from panda.core import Mat3
-from panda.ode import OdeMass, OdeCylinderGeom
+from panda3d.core import Mat3
+from panda3d.ode import OdeMass, OdeCylinderGeom
 from exploratorium.entities import PhysicsEntity
 
 SPEED = 10
