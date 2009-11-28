@@ -1,4 +1,5 @@
-from pandac.PandaModules import OdeMass, OdeCylinderGeom, Mat3
+from panda.core import Mat3
+from panda.ode import OdeMass, OdeCylinderGeom
 from exploratorium.entities import PhysicsEntity
 
 SPEED = 10
@@ -39,12 +40,12 @@ class Hero(PhysicsEntity):
         self.tasks = []
         self.currentMaxSpeed = MAX_SLOW_SPEED
     
-    def _collidedWithAnything(self, _, other):
+    def _collidedWithAnything(self, other):
         self.canJump = True
     
-    def _collidedWithCell(self, _, cell):
+    def _collidedWithCell(self, cell):
         self.cell = cell
-
+    
     def setMaxSpeed(self, speed):
         self.currentMaxSpeed = speed
         

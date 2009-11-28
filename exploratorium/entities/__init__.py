@@ -1,5 +1,6 @@
 # from zope.interface import Interface, implements, Attribute
-from pandac.PandaModules import NodePath, OdeBody, OdeTriMeshData, OdeTriMeshGeom, OdeMass, BitMask32, Quat
+from panda3d.core import NodePath, BitMask32, Quat
+from panda3d.ode import OdeBody, OdeTriMeshData, OdeTriMeshGeom, OdeMass
 from exploratorium.util import geomId
 
 import os.path
@@ -49,11 +50,12 @@ class StaticEntity(object):
 
         self._cell.addEntity(self)
 
-    def sendEntityEvent(self, eventtype, entities, withTags=True):
+    def sendEntityEvent(self, eventtype, *entities, **kwargs):
+        withTags = kwargs.get('withTags', True)
         for ents in itertools.permutations(entities):
             permu = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
-            for enttags in itertools.product(permu):
-                base.send("%s: %s" % (eventtype, entities))
+            for enttags in itertools.product(*permu):
+                messenger.send("%s: %s" % (eventtype, ' '.join(enttags)), list(entities))
     
     @property
     def data(self):
@@ -116,7 +118,7 @@ class StaticEntity(object):
     @cell.setter
     def cell(self, value):
         if self._cell != value:
-            self.sendEntityEvent("change cell", [self._cell, value])
+            self.sendEntityEvent("change cell", self._cell, value)
             del self._cell.entities[self.name]
             self._cell = value
             self._cell.addEntity(self)

@@ -1,5 +1,5 @@
 
-from pandac.PandaModules import OdeWorld, OdeSimpleSpace, OdeJointGroup, OdeUtil
+from panda3d.ode import OdeWorld, OdeSimpleSpace, OdeJointGroup, OdeUtil
 from exploratorium.entities import CollidableEntity, geomToEnt
 from exploratorium.util import diagonal, geomId
 
@@ -7,7 +7,7 @@ class World(object):
 
     def __init__(self):
         self.physAccum = 0
-        self.physStep  = 1. / 60
+        self.physStep  = 1. / 120
         
         self.physWorld = OdeWorld()
         self.physWorld.setGravity(0, 0, -15)
@@ -38,13 +38,14 @@ class World(object):
         dt = globalClock.getDt()
         self.physAccum += dt
         
-        #while self.physAccum > self.physStep:
-        self.physSpace.autoCollide()
-        self.physWorld.quickStep(self.physStep)
-        self.physContactGroup.empty()
+        while self.physAccum > self.physStep:
+            self.physSpace.autoCollide()
+            self.physAccum -= dt
+            self.physWorld.quickStep(self.physStep)
+            self.physContactGroup.empty()
 
-        for cell in self.cells.itervalues():
-            cell.simulate()
+            for cell in self.cells.itervalues():
+                cell.simulate()
     
     def addCell(self, cell):
         self.cells[cell.name] = cell
