@@ -13,7 +13,7 @@ class World(object):
         self.physWorld.setGravity(0, 0, -15)
         
         self.physWorld.initSurfaceTable(1)
-        self.physWorld.setSurfaceEntry(0, 0, 1, 0.0, 0, 0.9, 0.00001, 0.0, 1)
+        self.physWorld.setSurfaceEntry(0, 0, 0.7, 0.0, 0.0, 0.9, 0.00001, 200, 100)
         
         self.physSpace = OdeSimpleSpace()
         self.physContactGroup = OdeJointGroup()

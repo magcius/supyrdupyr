@@ -21,7 +21,7 @@ def tick(self):
 
 props = WindowProperties()
 props.setCursorHidden(True)
-props.setMouseMode(WindowProperties.MRelative)
+# props.setMouseMode(WindowProperties.MRelative)
 base.disableMouse()
 base.win.requestProperties(props)
 
