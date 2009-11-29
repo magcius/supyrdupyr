@@ -148,8 +148,6 @@ def assignNeighbours(cellMap):
             northeast.setNeighbour("sw", southwest)
             southwest.setNeighbour("ne", northeast)
 
-    print "END OF assignNeighbours"
-
 from exploratorium.levels.root import DevCell
 
 d = DevCell

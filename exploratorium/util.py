@@ -11,3 +11,6 @@ def diagonal(L, offset=0):
 
 def geomId(geom):
     return str(geom).split()[2][:-1]
+
+def clamp(num, min_, max_):
+    return min(max_, max(min_, num))

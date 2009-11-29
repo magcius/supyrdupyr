@@ -1,9 +1,11 @@
 
 
 import direct.directbase.DirectStart
-
 from direct.task import Task
 
+from panda3d.core import ModifierButtons, WindowProperties
+
+import sys
 import os.path
 import __builtin__
 
@@ -17,6 +19,14 @@ def tick(self):
     world.updateWorld()
     return Task.cont
 
+props = WindowProperties()
+props.setCursorHidden(True)
+props.setMouseMode(WindowProperties.MRelative)
+base.disableMouse()
+base.win.requestProperties(props)
+
+base.accept("escape", sys.exit)
+
 world = M_world.world
 hero = M_hero.Hero(world.root)
 rootModel = world.root.model
@@ -25,7 +35,7 @@ hero.setPosition(0, 0, 10)
 
 base.setFrameRateMeter(True)
 
-# base.buttonThrowers[0].node().setModifierButtons(ModifierButtons())
+base.buttonThrowers[0].node().setModifierButtons(ModifierButtons())
 
 render.prepareScene(base.win.getGsg())
 

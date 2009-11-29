@@ -1,40 +1,48 @@
 from panda3d.core import Mat3
-from panda3d.ode import OdeMass, OdeCylinderGeom
+from panda3d.ode import OdeMass, OdeCylinderGeom, OdeRayGeom
 from exploratorium.entities import PhysicsEntity
+from exploratorium.util import clamp
+
+# from math import sin, cos, pi
 
 SPEED = 10
 JUMP_FORCE = 10
-MAX_SLOW_SPEED = 100
-MAX_FAST_SPEED = 2000
+MAX_SLOW_SPEED = 1000
+MAX_FAST_SPEED = 20000
+MAX_LOOK = 1000.
 
 class Hero(PhysicsEntity):
     
-    def __init__(self, cell):
+    def __init__(self, cell, captureCamera=True):
         
         PhysicsEntity.__init__(self, cell, "hero", "jeff.egg", 10, "physics hero")
 
         self.physGeom = OdeCylinderGeom(self._world.physSpace, 0.125, 2)
-        self._model.setColor(0, 0, 0)
+        self.useRay = OdeRayGeom(self._world.physSpace, 50)
+        bounds = self._model.getBounds()
+        # self._model.setColor(0, 0, 0)
         
         base.accept("collided: [hero] [*]",    self._collidedWithAnything)
         base.accept("collided: [hero] [cell]", self._collidedWithCell)
 
-        base.accept("w", self.addTask, [self.move, 0, SPEED])
-        base.accept("w-up", self.removeTask, [self.move, 0, SPEED])
+        KEYS = dict(w=(0, SPEED), s=(0, -SPEED), a=(-SPEED, 0), d=(SPEED, 0))
+        for key in KEYS:
+            base.accept(key, self.addTask, [self.move, KEYS[key]])
+            base.accept(key+"-up", self.removeTask, [self.move, KEYS[key]])
         
-        base.accept("s", self.addTask, [self.move, 0, -SPEED])
-        base.accept("s-up", self.removeTask, [self.move, 0, -SPEED])
-        
-        base.accept("a", self.addTask, [self.move, -SPEED, 0])
-        base.accept("a-up", self.removeTask, [self.move, -SPEED, 0])
-        
-        base.accept("d", self.addTask, [self.move, SPEED, 0])
-        base.accept("d-up", self.removeTask, [self.move, SPEED, 0])
-
         base.accept("space", self.jump)
-
+        
         base.accept("shift", self.setMaxSpeed, [MAX_FAST_SPEED])
         base.accept("shift-up", self.setMaxSpeed, [MAX_SLOW_SPEED])
+
+        self.captureCamera = captureCamera
+        
+        if captureCamera:
+            base.camera_root = self._model.attachNewNode("camera_root")
+            base.camera.reparentTo(base.camera_root)
+            base.camera.setPos(0, -10, 0)
+            base.camera.lookAt(self._model)
+            base.oldx, base.oldy, base.yaccum = 0, 0, 0
         
         self.canJump = False
         self.tasks = []
@@ -54,12 +62,10 @@ class Hero(PhysicsEntity):
 
     def jump(self):
         if self.canJump:
-            print "Jumping!"
             self.physBody.addRelForce(0, 0, 200)
             self.canJump = False
 
     def simulate(self):
-        self._model.setHpr(0, 0, 0)
         
         self.physBody.setAngularVel(0, 0, 0)
         self.physBody.setQuaternion(self._model.getQuat())
@@ -72,17 +78,27 @@ class Hero(PhysicsEntity):
         
         for func, args in self.tasks:
             func(*args)
-            
-        x, y, z = self.physBody.getPosition()
-        base.camera.setPos(x, y+10, z+2)
-        base.camera.lookAt(x, y, z)
+
+        if self.captureCamera:
+            mp = base.win.getPointer(0)
+            x, y = mp.getX(), mp.getY()
+            self.setRotation(self._model, x - base.oldx, 0, 0)
+            base.yaccum = clamp(base.yaccum + y - base.oldy, 0, MAX_LOOK)
+            # ratio = base.yaccum / MAX_LOOK * pi/2
+            # cy, cz = sin(ratio) * -10, cos(ratio) * 5
+            base.camera_root.setHpr(0, base.yaccum / MAX_LOOK * 90 - 90, 0)
+            base.camera.lookAt(self._model)
+            base.oldx, base.oldy = x, y
+
+        self.useRay.setQuaternion(self._model.getQuat())
+        self.useRay.setPosition(self._model.getPos())
         
         PhysicsEntity.simulate(self)
 
-    def addTask(self, func, *args):
+    def addTask(self, func, args):
         self.tasks.append((func, args))
 
-    def removeTask(self, func, *args):
+    def removeTask(self, func, args):
         if (func, args) in self.tasks:
             self.tasks.remove((func, args))
         

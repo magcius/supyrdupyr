@@ -1,5 +1,5 @@
 # from zope.interface import Interface, implements, Attribute
-from panda3d.core import NodePath, BitMask32, Quat
+from panda3d.core import NodePath, BitMask32, Quat, Vec3
 from panda3d.ode import OdeBody, OdeTriMeshData, OdeTriMeshGeom, OdeMass
 from exploratorium.util import geomId
 
@@ -41,7 +41,7 @@ class StaticEntity(object):
         self._outputValues = {}
         
         self._cell  = cell
-        self._world = cell._world
+        self._world = cell.world
         self._data  = None
         self._name  = name
         
@@ -50,14 +50,17 @@ class StaticEntity(object):
 
         self._cell.addEntity(self)
 
+        base.accept("start use: [*] '%s'" % (self.name,), self.triggerOutput, extraArgs=[True, 'use'])
+        base.accept("end use: [*] '%s'" % (self.name,), self.triggerOutput, extraArgs=[False, 'use'])
+
     def sendEntityEvent(self, eventtype, *entities, **kwargs):
         withTags = kwargs.get('withTags', True)
         permute  = kwargs.get('permute', False)
         loop = itertools.permutations(entities) if permute else [entities]
         for ents in loop:
-            ents = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
-            for enttags in itertools.product(*ents):
-                messenger.send("%s: %s" % (eventtype, ' '.join(enttags)), [self] + list(ents))
+            args = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
+            for eventargs in itertools.product(*args):
+                messenger.send("%s: %s" % (eventtype, ' '.join(eventargs)), [self] + list(ents))
     
     @property
     def data(self):
@@ -86,6 +89,11 @@ class StaticEntity(object):
             self._model.reparentTo(self._cell.model)
 
     @property
+    def centerPoint(self):
+        bounds = self._model.getBounds()
+        return bounds.getCenter()
+    
+    @property
     def name(self):
         return self._name
     
@@ -104,7 +112,7 @@ class StaticEntity(object):
         self._model.setPos(x, y, z)
 
     def setRotation(self, h, p, r):
-        self._model.setRot(h, p, r)
+        self._model.setHpr(h, p, r)
 
     def setQuaternion(self, quat):
         self._model.setQuat(quat)
@@ -206,19 +214,18 @@ class CollidableEntity(StaticEntity):
             self._physGeom = OdeTriMeshGeom(self._world.physSpace, trimesh)
         else:
             self._physGeom = value
-            
+        
         self._physGeom.setCollideBits(getTagBits(self.collisionTags))
         self._physGeom.setCategoryBits(getTagBits(self.tags))
         geomToEnt[geomId(self._physGeom)] = self
 
-    def setPosition(self, x, y, z):
-        self._model.setPos(x, y, z)
-        print "Setting GEOM position: %d %d %d" % (self._model.getX(render), self._model.getY(render), self._model.getZ(render))
+    def setPosition(self, *args):
+        self._model.setPos(*args)
         self._physGeom.setPosition(self._model.getX(render), self._model.getY(render), self._model.getZ(render))
 
-    def setRotation(self, h, p, r):
-        self._model.setRot(h, p, r)
-        self._physGeom.setRotation(h, p, r)
+    def setRotation(self, *args):
+        self._model.setHpr(*args)
+        self._physGeom.setQuaternion(self._model.getQuat())
 
     def setQuaternion(self, quat):
         self._model._setQuat(quat)
@@ -243,6 +250,7 @@ class PhysicsEntity(CollidableEntity):
         CollidableEntity.physGeom.fset(self, value)
         if self._physBody is not None:
             self._physGeom.setBody(self._physBody)
+            self._physGeom.setOffsetPosition(self.centerPoint)
     
     @property
     def physBody(self):
@@ -272,14 +280,13 @@ class PhysicsEntity(CollidableEntity):
             self._physMass = value
         self._physBody.setMass(self._physMass)
 
-    def setPosition(self, x, y, z):
-        self._model.setPos(x, y, z)
-        print "Setting PHYS position: %d %d %d" % (self._model.getX(render), self._model.getY(render), self._model.getZ(render))
+    def setPosition(self, *args):
+        self._model.setPos(*args)
         self._physBody.setPosition(self._model.getX(render), self._model.getY(render), self._model.getZ(render))
 
-    def setRotation(self, h, p, r):
-        self._model.setRot(h, p, r)
-        self._physBody.setRotation(h, p, r)
+    def setRotation(self, *args):
+        self._model.setHpr(*args)
+        self._physBody.setQuaternion(self._model.getQuat())
 
     def setQuaternion(self, quat):
         self._model._setQuat(quat)
