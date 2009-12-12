@@ -1,7 +1,6 @@
-from panda3d.core import Mat3
-from panda3d.ode import OdeMass, OdeCylinderGeom, OdeRayGeom
-from exploratorium.entities import PhysicsEntity
-from exploratorium.util import clamp
+
+from supyrdupyr.entities import PhysicsEntity
+from supyrdupyr.util import clamp
 
 # from math import sin, cos, pi
 
@@ -9,40 +8,41 @@ SPEED = 10
 JUMP_FORCE = 10
 MAX_SLOW_SPEED = 1000
 MAX_FAST_SPEED = 20000
-MAX_LOOK = 1000.
+MAX_LOOK = 1000.0
 
 class Hero(PhysicsEntity):
     
     def __init__(self, cell, captureCamera=True):
         
-        PhysicsEntity.__init__(self, cell, "hero", "jeff.egg", 10, "physics hero")
-
-        self.physGeom = OdeCylinderGeom(self._world.physSpace, 0.125, 2)
-        self.useRay = OdeRayGeom(self._world.physSpace, 50)
-        bounds = self._model.getBounds()
+        PhysicsEntity.__init__(self, cell, "Hero", "testhero.mesh", 10, "physics hero")
+        
+        # self.physGeom = OdeCylinderGeom(self._world.physSpace, 0.125, 2)
+        # self.useRay = OdeRayGeom(self._world.physSpace, 50)
         # self._model.setColor(0, 0, 0)
         
-        base.accept("collided: [hero] [*]",    self._collidedWithAnything)
-        base.accept("collided: [hero] [cell]", self._collidedWithCell)
-
+        self.app.messenger.accept("collided: [hero] [*]",    self._collidedWithAnything)
+        self.app.messenger.accept("collided: [hero] [cell]", self._collidedWithCell)
+        
         KEYS = dict(w=(0, SPEED), s=(0, -SPEED), a=(-SPEED, 0), d=(SPEED, 0))
         for key in KEYS:
-            base.accept(key, self.addTask, [self.move, KEYS[key]])
-            base.accept(key+"-up", self.removeTask, [self.move, KEYS[key]])
+            self.app.messenger.accept(key, self.addTask, [self.move, KEYS[key]])
+            self.app.messenger.accept(key+"-up", self.removeTask, [self.move, KEYS[key]])
         
-        base.accept("space", self.jump)
+        self.app.messenger.accept("space", self.jump)
         
-        base.accept("shift", self.setMaxSpeed, [MAX_FAST_SPEED])
-        base.accept("shift-up", self.setMaxSpeed, [MAX_SLOW_SPEED])
-
+        self.app.messenger.accept("shift", self.setMaxSpeed, [MAX_FAST_SPEED])
+        self.app.messenger.accept("shift-up", self.setMaxSpeed, [MAX_SLOW_SPEED])
+        
         self.captureCamera = captureCamera
         
         if captureCamera:
-            base.camera_root = self._model.attachNewNode("camera_root")
-            base.camera.reparentTo(base.camera_root)
-            base.camera.setPos(0, -10, 0)
-            base.camera.lookAt(self._model)
-            base.oldx, base.oldy, base.yaccum = 0, 0, 0
+            self.cameraNode      = self._model.createChildSceneNode()
+            self.cameraYawNode   = self.cameraNode.createChildSceneNode()
+            self.cameraPitchNode = self.cameraYawNode.createChildSceneNode()
+            self.cameraRollNode  = self.cameraPitchNode.createChildSceneNode()
+            self.cameraRollNode.attachObject(self.app.camera)
+            self.app.camera.setPosition((0, -10, 0))
+            self.app.camera.lookAt(self._model)
         
         self.canJump = False
         self.tasks = []

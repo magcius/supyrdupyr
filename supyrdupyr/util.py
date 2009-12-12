@@ -1,5 +1,4 @@
 
-
 def diagonal(L, offset=0):
     L = list(L)
     for i in xrange(offset, offset+len(L)):
@@ -9,8 +8,11 @@ def diagonal(L, offset=0):
                 yield SL[i]
 
 
-def geomId(geom):
-    return str(geom).split()[2][:-1]
-
 def clamp(num, min_, max_):
     return min(max_, max(min_, num))
+
+def methodSignature(f, args, kwargs):
+    argstring = ', '.join(str(a) for a in args)
+    if kwargs:
+        argstring += ', ' + ', '.join("%s=%s" % t for t in kwargs.iteritems())
+    return "%s(%s)" % (f.__name__, argstring)
