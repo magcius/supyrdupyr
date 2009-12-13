@@ -9,10 +9,9 @@ from supyrdupyr.messenger import Messenger
 
 class MessengerFrameListener(ogre.FrameListener, ogre.WindowEventListener, OIS.MouseListener, OIS.KeyListener):
 
-    buffered = False
+    buffered = True
     
     def __init__(self, app, win, cam, scman):
-        # super(MessengerFrameListener, self).__init__()
         ogre.FrameListener.__init__(self)
         ogre.WindowEventListener.__init__(self)
         OIS.MouseListener.__init__(self)
@@ -61,7 +60,7 @@ class MessengerFrameListener(ogre.FrameListener, ogre.WindowEventListener, OIS.M
             windowHnd = self.renderWindow.getCustomAttributeUnsignedLong("WINDOW")
         else:
             windowHnd = self.renderWindow.getCustomAttributeInt("WINDOW")
-         
+        
         pl = ogre.SettingsMultiMap()
         windowHndStr = str(windowHnd)
         pl.insert("WINDOW", windowHndStr)
@@ -73,7 +72,7 @@ class MessengerFrameListener(ogre.FrameListener, ogre.WindowEventListener, OIS.M
             self.joyInput = self.inputManager.createInputObjectJoyStick(OIS.OISJoyStick, self.buffered)
         except:
             pass
-         
+        
         self.windowResized(self.renderWindow)
         
         ogre.WindowEventUtilities.addWindowEventListener(self.renderWindow, self)
@@ -96,7 +95,7 @@ class BaseApplication(object):
     def __init__(self):
         self.frameListener, self.root, self.camera = None, None, None
         self.renderWindow, self.viewport, self.sceneManager = None, None, None
-        self.messenger = Messenger(self)
+        self.messenger = None
     
     def getConfigFilePath(self, filename):
         path = os.path.join(self.configDir, filename + ".cfg")
@@ -127,13 +126,14 @@ class BaseApplication(object):
         self.root.startRendering()
         
     def setup(self):
-        self.root = ogre.Root(self.getConfigFilePath("plugins"), self.getConfigFilePath("ogre"))
         
+        self.root = ogre.Root(self.getConfigFilePath("plugins"), self.getConfigFilePath("ogre"))
         self.root.setFrameSmoothingPeriod(self.frameSmoothingPeriod)
+        
         self.setupResources()
         self.configure()
 
-        self.createMessenger()
+        self.messenger = self.createMessenger()
 
         self.createSceneManagers()
         self.createWorld()
@@ -182,7 +182,7 @@ class BaseApplication(object):
         self.renderWindow = self.root.initialise(True, self.windowTitle)
     
     def createMessenger(self):
-        self.messenger = Messenger(self)
+        return Messenger(self)
 
     def createSceneManagers(self):
         self.sceneManager = self.root.createSceneManager(ogre.ST_GENERIC, "SceneManager")
