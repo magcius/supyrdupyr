@@ -1,4 +1,8 @@
 
+"""
+Base entities.
+"""
+
 from ogre.renderer import OGRE as ogre
 from ogre.physics import bullet, OgreBulletC
 import itertools
@@ -6,10 +10,13 @@ import itertools
 TAG_REGISTRY            = dict()
 
 def getTagBits(tags):
+    """
+    Get the collision and category bits for our tags.
+    """
     bits = 0
     notBits = False
     if not tags:
-        return 0xFFFFFFFF
+        return 0xFF
     
     if all(tag[0] == "!" for tag in tags):
         tags = [tag[1:] for tag in tags]
@@ -28,15 +35,22 @@ def getTagBits(tags):
 
 
 class BaseEntity(object):
+    """
+    A base entity. Has name, tags, world, apps and custom data. That's it.
+    The name must be unique for each entity.
+    """
     def __init__(self, world, name, tags=""):
-        self.world = world
-        self.world.addEntity(self)
         self.tags   = "all * " + tags
         self.name = name
         self.data = None
+        self.world = world
+        self.world.addEntity(self)
         
     @property
     def tags(self):
+        """
+        The entity tags used when sending global events.
+        """
         return self._tags
     
     @tags.setter
@@ -48,12 +62,46 @@ class BaseEntity(object):
     
     @property
     def app(self):
+        """
+        The application.
+        """
         return self.world.app
     
     def simulate(self, dt):
         pass
 
+    def sendEntityEvent(self, eventtype, *entities, **kwargs):
+        """
+        Send an entity event through the messenger.
+
+        Example:
+
+            hero.sendEntityEvent("collided", ground)
+
+        will send:
+
+            collided: 'heroName' 'groundName'
+            collided: [*] 'groundName'
+            collided: [hero] 'groundName'
+            collided: [physics] 'groundName'
+            etc.
+        
+        with the variables "hero" and "ground" being arguments.
+        [] brackets represent a tag. '' quotes represent a name in the world.
+        heroName and groundName represent the names of the hero and ground entities.
+        """
+        withTags = kwargs.get('withTags', True)
+        permute  = kwargs.get('permute', False)
+        loop = itertools.permutations(entities) if permute else [entities]
+        for ents in loop:
+            args = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
+            for eventargs in itertools.product(*args):
+                self.app.messenger.send("%s: %s" % (eventtype, ' '.join(eventargs)), [self] + list(ents))
+
 class InputOutputMeta(type):
+    """
+    Metaclass to implement the input/outputSpec and inputHandlers documentation and inheritance.
+    """
     def __new__(cls, names, bases, dct):
         def formatSpec(spec):
             return '\n'.join(formatPutSpec(s) for s in spec.iteritems())
@@ -63,14 +111,14 @@ class InputOutputMeta(type):
             return "    %s : %s\n      %s\n" % (name, ' '.join("<%s>" % (type.__name__,) for type in (parameters or [])) or "none", doc)
         
         D = dct.copy()
-        D.update(dict(outputSpec={}, inputSpec={}))
+        D.update(dict(outputSpec={}, inputSpec={}, inputHandlers={}))
         for base in reversed(bases):
             if hasattr(base, "outputSpec"):
                 D["outputSpec"].update(getattr(base, "outputSpec"))
             if hasattr(base, "inputSpec"):
                 D["inputSpec"].update(getattr(base, "inputSpec"))
             if hasattr(base, "inputHandlers"):
-                D["inputHanders"].update(getattr(base, "inputHandlers"))
+                D["inputHandlers"].update(getattr(base, "inputHandlers"))
         
         D["outputSpec"].update(dct.get("outputSpec", {}))
         D["inputSpec"].update(dct.get("inputSpec", {}))
@@ -88,9 +136,12 @@ class InputOutputMeta(type):
 """ % (formatSpec(D["inputSpec"]), formatSpec(D["outputSpec"]))
         return type.__new__(cls, names, bases, D)
 
-def checkSpec(spec, value):
-    types, doc = spec
-    return all(isinstance(VALUE, TYPE) for VALUE, TYPE in zip(value, types))
+# def checkSpec(spec, value):
+#     """
+#     Checks the spec to make sure it has the specific types.
+#     """
+#     types, doc = spec
+#     return all(isinstance(VALUE, TYPE) for VALUE, TYPE in zip(value, types))
 
 class LogicEntity(BaseEntity):
     
@@ -114,51 +165,70 @@ class LogicEntity(BaseEntity):
         self.setupEventHandlers()
         self.setupIO()
     
-    def sendEntityEvent(self, eventtype, *entities, **kwargs):
-        withTags = kwargs.get('withTags', True)
-        permute  = kwargs.get('permute', False)
-        loop = itertools.permutations(entities) if permute else [entities]
-        for ents in loop:
-            args = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
-            for eventargs in itertools.product(*args):
-                self.app.messenger.send("%s: %s" % (eventtype, ' '.join(eventargs)), [self] + list(ents))
-    
     def kill(self, value):
-        self.isNotKilled = False # FIXME: Instead of setting a flag, clear it off the "world"
         self.fireOutput("OnKill")
+        self.isNotKilled = False
+        self.world.killEntity(self)
 
     def enable(self, value):
+        """
+        Enable this entity.
+        """
         self.enabled = True
 
     def disable(self, value):
+        """
+        Disable this entity.
+        This will prevent it from firing outputs, but it can still simulate and trigger inputs.
+        """
         self.enabled = False
 
     def toggle(self, value):
+        """
+        Toggle this entity between enabled and disabled states.
+        """
         self.enabled = not self.enabled
     
     def setupEventHandlers(self):
+        """
+        Override this method when setting up event handlers for the messenger.
+        """
         pass
 
     def setupIO(self):
+        """
+        Override this method when setting up IO triggers.
+        """
         pass
     
     def bindOutput(self, outputName, inputObj, inputName):
+        """
+        Bind outputName on this object to inputName on inputObj.
+        """
         assert outputName in self.outputSpec
         self._outputBindings.setdefault(outputName, [])
         self._outputBindings[outputName].append((inputObj, inputName))
     
     def fireOutput(self, outputName, value=None):
+        """
+        Fire the given output outputName with the specified value.
+        """
         if self.isNotKilled and self.enabled:
-            assert checkSpec(self.outputSpec[outputName], value)
             for inputObj, inputName in self._outputBindings.get(outputName, []):
                 inputObj.triggerInput(inputName, value)
 
-    def _fireOutput_event(self, _, __, outputName, value=None):
+    def _fireOutput_event(self, outputName, value=None, *_, **__):
+        """
+        An event-friendly version of fireOutput.
+        """
         self.fireOutput(value, outputName)
     
     def triggerInput(self, inputName, value):
+        """
+        Trigger the given input.
+        """
         if self.isNotKilled:
-            assert inputName in self.inputSpec and checkSpec(self.inputSpec[inputName], value)
+            assert inputName in self.inputSpec
 
             if inputName in self.inputHandlers:
                 handler = self.inputHandlers[inputName]
@@ -203,27 +273,32 @@ class VisibleEntity(LogicEntity):
     A visible entity that renders itself using the given model.
     """
     def __init__(self, world, name, position, model, tags=""):
-        super(VisibleEntity, self).__init__(name, world, tags)
+        super(VisibleEntity, self).__init__(world, name, tags)
         
-        self.model  = model
-        self._model.setPosition(position)
-
+        self.createOGRE(model)
+        self.sceneNode.setPosition(position)
+        print self.sceneNode.getParent().getParent().getName()
+        
     def setupEventHandlers(self):
         self.app.messenger.accept("start use: [*] '%s'" % (self.name,), self._fireOutput_event, extraArgs=['OnUse', True])
         self.app.messenger.accept("end use: [*] '%s'" % (self.name,), self._fireOutput_event, extraArgs=['OnUse', False])
-        
-    @property
-    def model(self):
-        return self._model
-
-    @model.setter
-    def model(self, value):
+    
+    def createOGRE(self, value):
         if isinstance(value, basestring):
-            self._model = self.app.sceneManager.createEntity(self.name, value)
+            loaded = False
+            for suffix in ("", ".mesh"):
+                try:
+                    self.entity = self.app.sceneManager.createEntity(self.name, value + suffix)
+                    loaded = True
+                except ogre.OgreException, e:
+                    continue
+            if not loaded:
+                raise e
         else:
             self._model = value
-        
-        self.world.worldNode.attachNode(self._model)
+
+        self.sceneNode = self.world.worldNode.createChildSceneNode(self.name + "/Node")
+        self.sceneNode.attachObject(self.entity)
     
     outputSpec = {
         "OnUse": (None, "Fired when a user fires this object."),
@@ -231,21 +306,21 @@ class VisibleEntity(LogicEntity):
 
     
 class PhysicsEntityMotionState(bullet.btMotionState):
-    def __init__(self, entity, initialPosition):
+    def __init__(self, entity, initialTransform):
         bullet.btMotionState.__init__(self)
-        self.entity   = entity
-        self.position = initialPosition
-        self.rotation = bullet.btQuaternion()
-        
-    def getWorldTransform(self, worldTrans): 
-        worldTrans.setOrigin(self.position.getOrigin())
-        worldTrans.setBasis (self.position.getBasis())
-        worldTrans.setRotation(self.rotation)
+        self.entity    = entity
+        self.transform = initialTransform
+    
+    def getWorldTransform(self, worldTrans):
+        worldTrans.setOrigin  (self.transform.getOrigin())
+        worldTrans.setRotation(self.transform.getRotation())
         
     def setWorldTransform(self, worldTrans):
         origin, rotation = worldTrans.getOrigin(), worldTrans.getRotation()
-        self.entity.setPosition(origin.x(), origin.y(), origin.z())
-        self.entity.setQuaternion(ogre.Quaternion(rotation.w(), rotation.x(), rotation.y(), rotation.z()))
+        self.transform.setOrigin(origin)
+        self.transform.setRotation(rotation)
+        self.entity.sceneNode.setPosition(origin.x(), origin.y(), origin.z())
+        self.entity.sceneNode.setOrientation(ogre.Quaternion(rotation.w(), rotation.x(), rotation.y(), rotation.z()))
 
 class PhysicsEntity(VisibleEntity):
     
@@ -254,84 +329,64 @@ class PhysicsEntity(VisibleEntity):
     
     MotionState = PhysicsEntityMotionState
     physFlags   = 0
+
+    hasGhostObject = False
     
-    def __init__(self, cell, name, position, model, mass, tags="", collisionModel=None, collisionTags=None, physShape=None):
-        super(PhysicsEntity, self).__init__(cell, name, model, position, "physics" + tags)
+    def __init__(self, world, name, position, model, tags="", mass=0, collisionModel=None, collisionTags=None, physShape=None):
+        super(PhysicsEntity, self).__init__(world, name, position, model, "physics " + tags)
+        
         self.collisionTags  = collisionTags
-        self.collisionModel = collisionModel
-        self.physShape      = physShape
-        self.physBody       = self.createBody(mass, position)
+        self.createCollisionModel(collisionModel)
+        self.createShape(physShape)
+        self.createBody(mass, position)
 
     def createBody(self, mass, position):
-        motionState = self.MotionState(self, bullet.btTransform(bullet.btQuaternion(0, 0, 0, 1), bullet.btVector3(position)))
-        localInertia = bullet.btVector3(0, 0, 0)
-        self._physShape.calculateLocalInertia(mass, localInertia)
-        self._physMass = mass
-        construct = bullet.btRigidBody.btRigidBodyConstructionInfo(mass, motionState, self._physShape, localInertia)
-        body = bullet.btRigidBody(construct)
-        return body
-    
-    @property
-    def collisionModel(self):
-        return self._colModel
+        
+        position = bullet.btVector3(*position)
+        transform = bullet.btTransform(bullet.btQuaternion(0, 0, 0, 1), position)
+        
+        if self.hasGhostObject:
+            body = bullet.btPairCachingGhostObject()
+            body.setCollisionShape(self.physShape)
+            body.setWorldTransform(transform)
+            self.world.physWorld.addCollisionObject(body, getTagBits(self.tags), getTagBits(self.collisionTags))
+        else:
+            self.motionState = self.MotionState(self, transform)
+            self.physMass = mass
 
-    @collisionModel.setter
-    def collisionModel(self, value):
+            localInertia = bullet.btVector3(0, 0, 0)
+            self.physShape.calculateLocalInertia(mass, localInertia)
+        
+            construct = bullet.btRigidBody.btRigidBodyConstructionInfo(mass, self.motionState, self.physShape, localInertia)
+            body = bullet.btRigidBody(construct)
+            
+            self.world.physWorld.addRigidBody(body, getTagBits(self.tags), getTagBits(self.collisionTags))
+        
+        body.setCollisionFlags(body.getCollisionFlags() | self.physFlags)
+        body.setUserData(self)
+        self.physBody = body
+    
+    def createCollisionModel(self, value):
         if value is None:
-            self._colModel = self._model
+            self.collisionEntity = self.entity
         else:
             if isinstance(value, basestring):
-                self._colModel = self.app.sceneManager.createEntity(self.name+"-Collision", value)
+                self.collisionEntity = self.app.sceneManager.createEntity(self.name+"/Collision", value)
             else:
-                self.colModel = value
-            self._model.attachNode(self._colModel)
-
-    @property
-    def physShape(self):
-        return self._physShape
-
-    @physShape.setter
-    def physShape(self, value):
+                self.collisionEntity = value
+            self.sceneNode.attachObject(self.collisionEntity)
+            
+    def createShape(self, value):
         if value is None:
-            converter = OgreBulletC.StaticMeshToShapeConverter(self._colModel)
-            self._physShape = converter.createTrimesh()
+            converter = OgreBulletC.StaticMeshToShapeConverter(self.collisionEntity)
+            self.physShape = converter.createTrimesh().getBulletShape()
         else:
-            self._physShape = value
+            self.physShape = value
 
-        localInertia = bullet.btVector3(0, 0, 0)
-        self._physShape.calculateLocalInertia(self._physMass, localInertia)
-        
-        if self._physBody is not None:
-            self._physBody.setCollisionShape(self._physShape)
-    
-    @property
-    def physBody(self):
-        return self._physBody
-
-    @physBody.setter
-    def physBody(self, value):
-        self._physBody = value
-        if self._physMass is not None:
-            self.physMass = self._physMass # reset on the new body
-        self._physShape.setBody(self._physBody)
-        self.world.physWorld.addRigidBody(self._physBody, getTagBits(self.tags), getTagBits(self.collisionTags))
-        self._physBody.setUserPointer({"parent": self})
-        self._physBody.setCollisionFlags(self._physBody.getCollisionFlags() | self.physFlags)
-
-    @property
-    def physMass(self):
-        return self._physMass
-
-    @physMass.setter
-    def physMass(self, value):
-        self._physMass = value
-        localInertia = bullet.btVector3(0, 0, 0)
-        self._physShape.calculateLocalInertia(value, localInertia)
-        self._physBody.setMassProps(value, localInertia)
-        
-    outputSpec = {
-        "OnCollide": ([PhysicsEntity], "Fired when this object collides with another one."),
-    }
+# Define outside because it references itself.
+PhysicsEntity.outputSpec = {
+    "OnCollide": ([PhysicsEntity], "Fired when this object collides with another one."),
+}
 
 class StaticEntity(PhysicsEntity):
     physFlags = bullet.btCollisionObject.CF_STATIC_OBJECT

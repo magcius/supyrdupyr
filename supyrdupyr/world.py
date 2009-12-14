@@ -17,11 +17,12 @@ class WorldFrameListener(ogre.FrameListener):
 
 class World(object):
     
-    cellSize    = 512
-    cellMap     = []
+    # cellSize    = 512
+    # cellMap     = []
     
     def __init__(self, app):
         self.app = app
+        self.body = {}
         
         app.world = self
 
@@ -32,14 +33,18 @@ class World(object):
         self.physCollisionConfiguration = bullet.btDefaultCollisionConfiguration() 
         self.physDispatcher = bullet.btCollisionDispatcher (self.physCollisionConfiguration)
         
+        # self.physBroadphase = bullet.btAxisSweep3(bullet.btVector3(-1000, -1000, -1000), bullet.btVector3(1000, 1000, 1000))
         self.physBroadphase = bullet.btDbvtBroadphase()
-        self.physBroadphase.getOverlappingPairCache().setInternalGhostPairCallback(bullet.btGhostPairCallback())
+        self.physGhostCallback = bullet.btGhostPairCallback()
+        self.physBroadphase.getOverlappingPairCache().setInternalGhostPairCallback(self.physGhostCallback)
         self.physSolver = bullet.btSequentialImpulseConstraintSolver() 
         self.physWorld = bullet.btDiscreteDynamicsWorld(self.physDispatcher, self.physBroadphase, self.physSolver, self.physCollisionConfiguration)
-        self.physWorld.setGravity(bullet.btVector3(0, 0, -15))
+        self.physWorld.setGravity(bullet.btVector3(0, -10, 0))
 
         # self.cells = {}
         self.entities = {}
+
+        self.setupWorld()
     
     def updateWorld(self, dt):
         self.physWorld.stepSimulation(dt)
@@ -48,13 +53,13 @@ class World(object):
         manifolds = [dispatcher.getManifoldByIndexInternal(i) for i in xrange(dispatcher.getNumManifolds())]
         
         for mnf in manifolds:
-            ent1 = mnf.getBody0().getUserPointer()['parent']
-            ent2 = mnf.getBody1().getUserPointer()['parent']
+            ent1 = mnf.getBodyAsObject0().getUserData()
+            ent2 = mnf.getBodyAsObject1().getUserData()
             
             ent1.sendEntityEvent("collided", ent2)
-            ent1.triggerOutput("OnCollide", ent2)
+            ent1.fireOutput("OnCollide", ent2)
             ent2.sendEntityEvent("collided", ent1)
-            ent2.triggerOutput("OnCollide", ent1)
+            ent2.fireOutput("OnCollide", ent1)
 
         # for cell in self.cells.itervalues():
         #     cell.simulate()
@@ -62,6 +67,9 @@ class World(object):
         for entity in self.entities.itervalues():
             entity.simulate(dt)
 
+    def setupWorld(self):
+        pass
+    
     def addEntity(self, entity):
         if entity.name in self.entities:
             raise ValueError("This entity (or one with the same name) already exists in this world.")
@@ -71,6 +79,7 @@ class World(object):
         if entity.name not in self.entities:
             raise ValueError("This entity does not exist in this world")
         self.entities[entity.name] = None
+        del entity
     
     # def addCell(self, cell):
     #     self.cells[cell.name] = cell

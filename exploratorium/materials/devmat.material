@@ -15,13 +15,5 @@ material devmat/TEXFACE/devcell.png
 				colour_op modulate
 			}
 		}
-		pass
-		{
-			ambient 0.0 0.0 0.0
-			diffuse 0.0 0.0 0.0
-			specular 0.500000 0.500000 0.500000 1.000000 12.500000
-			scene_blend add
-			lighting off
-		}
 	}
 }

@@ -18,8 +18,6 @@ class Messenger(object):
     def send(self, eventName, args=[], kwargs={}):
         functions = self.registry.get(eventName, [])
         for _, __, function, args_, kwargs_ in functions:
-            args_ += args
-            kwargs_.update(kwargs)
-            if self.app.debugLogging:
-                print "Calling %s for event '%s'" % (methodSignature(function, args_, kwargs_), eventName)
-            function(*args, **kwargs)
+            #if self.app.debugLogging:
+            #    print "Calling %s for event '%s'" % (methodSignature(function, args + args_, dict(kwargs, **kwargs_)), eventName)
+            function(*(args + args_), **dict(kwargs, **kwargs_))

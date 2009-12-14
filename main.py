@@ -13,7 +13,7 @@ class configuration(type(sys)):
 
 def run_app_file(filename, configuration):
     sys.modules['configuration'] = configuration
-    execfile(filename, dict(__name__="__supyrdupyr__", __builtins__=__builtins__, configuration=configuration))
+    execfile(filename, dict(__name__="__supyrdupyr__", __builtins__=__builtins__))
 
 def run_app(appname, configuration):
     if os.path.isdir(appname) and os.path.isfile(os.path.join(appname, "app.py")):
@@ -28,9 +28,12 @@ def run_app(appname, configuration):
 
 def main():
     default_app = None
-
-    if os.path.exists("default_app"):
+    
+    try:
         default_app = open("default_app", "r").read().strip()
+    except IOError:
+        pass
+    
 
     parser = OptionParser()
     parser.add_option("-g", "--game", dest="game", help="name of the game to run")

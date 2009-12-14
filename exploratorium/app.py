@@ -8,16 +8,16 @@ if __name__ == "__main__":
 
 from supyrdupyr.baseapp import BaseApplication
 from exploratorium.world import World
-from exploratorium.hero import ExplrHero
+from exploratorium.hero import Hero
 
 class Exploratorium(BaseApplication):
 
     debugLogging = True
     
-    def createScene(self):
-        BaseApplication.createScene(self)
+    def createWorld(self):
+        self.camera.setNearClipDistance(0.1)
         self.world = World(self)
-        self.hero = ExplrHero()
+        self.hero = Hero(self.world)
 
 if __name__ in ("__supyrdupyr__", "__main__"):
     app = Exploratorium()

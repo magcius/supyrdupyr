@@ -1,10 +1,8 @@
 
 from supyrdupyr.world import World as sdWorld
-from exploratorium.levels.devcell import DevCell as d, RootDevCell as r
+from exploratorium.levels.devterrain import DevTerrain
 
 class World(sdWorld):
-    cellMap = \
-[[r, d, d, d,],
- [d, d, d, d,],
- [d, d, d, d,],
- [d, d, d, d,],]
+
+    def setupWorld(self):
+        self.terrain = DevTerrain(self)
