@@ -26,116 +26,15 @@ def getTagBits(tags):
     
     return bits
 
-class InputOutputMeta(type):
-    def __new__(cls, names, bases, dct):
-        def formatSpec(spec):
-            return '\n'.join(formatPutSpec(s) for spec in spec.iteritems())
-        
-        def formatPutSpec(spec):
-            name, (parameters, doc) = spec
-            return "    %s : %s\n      %s\n" % (name, ' '.join("<%s>" % (type,) for type in (parameters or [])) or "none", doc)
-        
-        dct.setdefault("outputSpec", {})
-        dct.setdefault("inputSpec", {})
-        for base in bases:
-            if hasattr(base, "outputSpec"):
-                dct["outputSpec"].update(getattr(base, "outputSpec"))
-            if hasattr(base, "inputSpec"):
-                dct["inputSpec"].update(getattr(base, "outputSpec"))
-
-        dct["__doc__"] += \
-"""
-
-  Inputs for this various entity:
-%s
-
-  Outputs for this various entity:
-%s
-""" % (formatSpec(dct["inputSpec"]), formatSpec(dct["outputSpec"]))
-        return type.__new__(cls, names, bases, dct)
 
 class BaseEntity(object):
     def __init__(self, world, name, tags=""):
         self.world = world
         self.world.addEntity(self)
         self.tags   = "all * " + tags
-    
-class LogicEntity(BaseEntity):
-    
-    """
-    An entity that handles basic logic functions. The input/output system
-    is modeled after the Source engine.
-    """
-
-    __metaclass__ = InputOutputMeta
-    
-    # Inputs/Outputs/Triggers
-    
-    def __init__(self, world, name, tags=""):
-        self.world = world
-        self.world.addEntity(self)
+        self.name = name
+        self.data = None
         
-        self.enabled = True
-        
-        self._outputBindings = {}
-        
-        self.setupEventHandlers()
-        self.setupIO()
-
-    @property
-    def name(self):
-        return self._name
-    
-    def sendEntityEvent(self, eventtype, *entities, **kwargs):
-        withTags = kwargs.get('withTags', True)
-        permute  = kwargs.get('permute', False)
-        loop = itertools.permutations(entities) if permute else [entities]
-        for ents in loop:
-            args = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
-            for eventargs in itertools.product(*args):
-                self.app.messenger.send("%s: %s" % (eventtype, ' '.join(eventargs)), [self] + list(ents))
-    
-    def kill(self):
-        self.enabled = False # FIXME: Instead of setting a flag, clear it off the "world"
-        self.fireOutput("OnKill")
-        
-    def setupIO(self):
-        pass
-    
-    def setupEventHandlers(self):
-        pass
-    
-    def bindOutput(self, outputName, inputObj, inputName, args=None, kwargs=None):
-        assert outputName in self.outputSpec
-        self._outputBindings.setdefault(outputName, [])
-        self._outputBindings[outputName].append((inputObj, inputName, args or [], kwargs or {}))
-        
-    def fireOutput(self, value, outputName):
-        if self.enabled:
-            for inputObj, inputName, args, kwargs in self._outputBindings.get(outputName, []):
-                inputObj._triggerInput(value, inputName, args, kwargs)
-
-    def _fireOutput_event(self, _, __, value, outputName):
-        self.fireOutput(value, outputName)
-    
-    def _triggerInput(self, value, inputName, args, kwargs):
-        if self.enabled:
-            assert inputName in self.inputSpec
-            func = self.inputHandlers[inputName]
-            func(self, value, *args, **kwargs)
-
-    def getInput(self, inputName):
-        try:
-            return self._inputValues[inputName]
-        except KeyError:
-            return None
-
-    def getOutput(self, outputName):
-        try:
-            return self._outputValues[outputName]
-        except KeyError:
-            return None
-
     @property
     def tags(self):
         return self._tags
@@ -148,23 +47,154 @@ class LogicEntity(BaseEntity):
             self._tags = list(value)
     
     @property
-    def data(self):
-        return self._data
+    def app(self):
+        return self.world.app
     
-    @data.setter
-    def data(self, value):
-        self._data = value
+    def simulate(self, dt):
+        pass
 
+class InputOutputMeta(type):
+    def __new__(cls, names, bases, dct):
+        def formatSpec(spec):
+            return '\n'.join(formatPutSpec(s) for s in spec.iteritems())
+        
+        def formatPutSpec(spec):
+            name, (parameters, doc) = spec
+            return "    %s : %s\n      %s\n" % (name, ' '.join("<%s>" % (type.__name__,) for type in (parameters or [])) or "none", doc)
+        
+        D = dct.copy()
+        D.update(dict(outputSpec={}, inputSpec={}))
+        for base in reversed(bases):
+            if hasattr(base, "outputSpec"):
+                D["outputSpec"].update(getattr(base, "outputSpec"))
+            if hasattr(base, "inputSpec"):
+                D["inputSpec"].update(getattr(base, "inputSpec"))
+            if hasattr(base, "inputHandlers"):
+                D["inputHanders"].update(getattr(base, "inputHandlers"))
+        
+        D["outputSpec"].update(dct.get("outputSpec", {}))
+        D["inputSpec"].update(dct.get("inputSpec", {}))
+        D["inputHandlers"].update(dct.get("inputHandlers", {}))
+        
+        D.setdefault("__doc__", "")
+        D["__doc__"] += \
+"""
+
+  Inputs for this entity:
+%s
+
+  Outputs for this entity:
+%s
+""" % (formatSpec(D["inputSpec"]), formatSpec(D["outputSpec"]))
+        return type.__new__(cls, names, bases, D)
+
+def checkSpec(spec, value):
+    types, doc = spec
+    return all(isinstance(VALUE, TYPE) for VALUE, TYPE in zip(value, types))
+
+class LogicEntity(BaseEntity):
+    
+    """
+    An entity that handles basic logic functions. The input/output system
+    is modeled after the Source engine.
+    """
+
+    __metaclass__ = InputOutputMeta
+    
+    # Inputs/Outputs/Triggers
+    
+    def __init__(self, world, name, tags=""):
+        super(LogicEntity, self).__init__(world, name, tags)
+        
+        self.isNotKilled = True # FIXME: remove from world
+        self.enabled = True
+        
+        self._outputBindings = {}
+        
+        self.setupEventHandlers()
+        self.setupIO()
+    
+    def sendEntityEvent(self, eventtype, *entities, **kwargs):
+        withTags = kwargs.get('withTags', True)
+        permute  = kwargs.get('permute', False)
+        loop = itertools.permutations(entities) if permute else [entities]
+        for ents in loop:
+            args = ((["'%s'" % ent.name] + (["[%s]" % tag for tag in ent.tags] if withTags else [])) for ent in ([self] + list(ents)))
+            for eventargs in itertools.product(*args):
+                self.app.messenger.send("%s: %s" % (eventtype, ' '.join(eventargs)), [self] + list(ents))
+    
+    def kill(self, value):
+        self.isNotKilled = False # FIXME: Instead of setting a flag, clear it off the "world"
+        self.fireOutput("OnKill")
+
+    def enable(self, value):
+        self.enabled = True
+
+    def disable(self, value):
+        self.enabled = False
+
+    def toggle(self, value):
+        self.enabled = not self.enabled
+    
+    def setupEventHandlers(self):
+        pass
+
+    def setupIO(self):
+        pass
+    
+    def bindOutput(self, outputName, inputObj, inputName):
+        assert outputName in self.outputSpec
+        self._outputBindings.setdefault(outputName, [])
+        self._outputBindings[outputName].append((inputObj, inputName))
+    
+    def fireOutput(self, outputName, value=None):
+        if self.isNotKilled and self.enabled:
+            assert checkSpec(self.outputSpec[outputName], value)
+            for inputObj, inputName in self._outputBindings.get(outputName, []):
+                inputObj.triggerInput(inputName, value)
+
+    def _fireOutput_event(self, _, __, outputName, value=None):
+        self.fireOutput(value, outputName)
+    
+    def triggerInput(self, inputName, value):
+        if self.isNotKilled:
+            assert inputName in self.inputSpec and checkSpec(self.inputSpec[inputName], value)
+
+            if inputName in self.inputHandlers:
+                handler = self.inputHandlers[inputName]
+                args = []
+            
+                if isinstance(handler, tuple):
+                    handler, args = handler
+                    
+                if callable(handler):
+                    handler(self, value + args)
+                elif isinstance(handler, str):
+                    self.fireOutput(handler, args)
+    
     inputHandlers = {
         "Kill": kill,
+        "Enable": enable,
+        "Disable": disable,
+        "Toggle": toggle,
     }
     
     inputSpec = {
-        "Kill": (None, "Remove this entity from the game.")
+        "Kill": (None, "Remove this entity from the game."),
+        "Enable": (None, "Enable this entity."),
+        "Disable": (None, "Disable this entity."),
+        "FireUser1": (None, "User-defined input for all your other tasks."),
+        "FireUser2": (None, "User-defined input for all your other tasks."),
+        "FireUser3": (None, "User-defined input for all your other tasks."),
+        "FireUser4": (None, "User-defined input for all your other tasks."),
     }
 
     outputSpec = {
         "OnKill": (None, "Fired when this entity is removed from the game."),
+        "OnUser1": (None, "User-defined output for all your other tasks."),
+        "OnUser2": (None, "User-defined output for all your other tasks."),
+        "OnUser3": (None, "User-defined output for all your other tasks."),
+        "OnUser4": (None, "User-defined output for all your other tasks."),
     }
 
 class VisibleEntity(LogicEntity):
@@ -173,20 +203,15 @@ class VisibleEntity(LogicEntity):
     A visible entity that renders itself using the given model.
     """
     def __init__(self, world, name, position, model, tags=""):
-
-        LogicEntity.__init__(self, name, world, tags)
-        
-        self._data  = None
-        self._name  = name
+        super(VisibleEntity, self).__init__(name, world, tags)
         
         self.model  = model
         self._model.setPosition(position)
 
     def setupEventHandlers(self):
-        self.app.messenger.accept("start use: [*] '%s'" % (self.name,), self._fireOutput_event, extraArgs=[True, 'OnTrigger'])
-        self.app.messenger.accept("end use: [*] '%s'" % (self.name,), self._fireOutput_event, extraArgs=[False, 'OnTrigger'])
-        self.app.messenger.accept("collided: '%s' [cell]" % name, self.changeCells)
-    
+        self.app.messenger.accept("start use: [*] '%s'" % (self.name,), self._fireOutput_event, extraArgs=['OnUse', True])
+        self.app.messenger.accept("end use: [*] '%s'" % (self.name,), self._fireOutput_event, extraArgs=['OnUse', False])
+        
     @property
     def model(self):
         return self._model
@@ -200,17 +225,11 @@ class VisibleEntity(LogicEntity):
         
         self.world.worldNode.attachNode(self._model)
     
-    @property
-    def world(self):
-        return self._world
-    
-    @property
-    def app(self):
-        return self._world.app
-    
-    def simulate(self):
-        pass
+    outputSpec = {
+        "OnUse": (None, "Fired when a user fires this object."),
+    }
 
+    
 class PhysicsEntityMotionState(bullet.btMotionState):
     def __init__(self, entity, initialPosition):
         bullet.btMotionState.__init__(self)
@@ -228,7 +247,7 @@ class PhysicsEntityMotionState(bullet.btMotionState):
         self.entity.setPosition(origin.x(), origin.y(), origin.z())
         self.entity.setQuaternion(ogre.Quaternion(rotation.w(), rotation.x(), rotation.y(), rotation.z()))
 
-class PhysicsEntity(EntityBase):
+class PhysicsEntity(VisibleEntity):
     
     _physMass = None
     _physBody = None
@@ -237,14 +256,13 @@ class PhysicsEntity(EntityBase):
     physFlags   = 0
     
     def __init__(self, cell, name, position, model, mass, tags="", collisionModel=None, collisionTags=None, physShape=None):
-        EntityBase.__init__(cell, name, model, position, "physics" + tags)
+        super(PhysicsEntity, self).__init__(cell, name, model, position, "physics" + tags)
         self.collisionTags  = collisionTags
         self.collisionModel = collisionModel
         self.physShape      = physShape
         self.physBody       = self.createBody(mass, position)
 
     def createBody(self, mass, position):
-        
         motionState = self.MotionState(self, bullet.btTransform(bullet.btQuaternion(0, 0, 0, 1), bullet.btVector3(position)))
         localInertia = bullet.btVector3(0, 0, 0)
         self._physShape.calculateLocalInertia(mass, localInertia)
@@ -296,7 +314,7 @@ class PhysicsEntity(EntityBase):
         if self._physMass is not None:
             self.physMass = self._physMass # reset on the new body
         self._physShape.setBody(self._physBody)
-        self._world.physWorld.addRigidBody(self._physBody, getTagBits(self.tags), getTagBits(self.collisionTags))
+        self.world.physWorld.addRigidBody(self._physBody, getTagBits(self.tags), getTagBits(self.collisionTags))
         self._physBody.setUserPointer({"parent": self})
         self._physBody.setCollisionFlags(self._physBody.getCollisionFlags() | self.physFlags)
 
@@ -310,12 +328,28 @@ class PhysicsEntity(EntityBase):
         localInertia = bullet.btVector3(0, 0, 0)
         self._physShape.calculateLocalInertia(value, localInertia)
         self._physBody.setMassProps(value, localInertia)
+        
+    outputSpec = {
+        "OnCollide": ([PhysicsEntity], "Fired when this object collides with another one."),
+    }
 
 class StaticEntity(PhysicsEntity):
     physFlags = bullet.btCollisionObject.CF_STATIC_OBJECT
 
 class TriggerEntity(PhysicsEntity):
-    physFlags = bullet.btCollisionObject.CF_NO_COLLISION_RESPONSE
-
-    def setupEventHandlers(self):
-        pass
+    physFlags = bullet.btCollisionObject.CF_NO_CONTACT_RESPONSE
+    
+    def setupIO(self):
+        self.bindOutput("OnCollide", self, "Trigger")
+        
+    inputHandlers = {
+        "Trigger": "OnTrigger",
+    }
+    
+    inputSpec = {
+        "Trigger": (None, "Fire the OnTrigger output."),
+    }
+    
+    outputSpec = {
+        "OnTrigger": (None, "Fired when this object is triggered."),
+    }

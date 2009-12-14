@@ -31,7 +31,7 @@ class MessengerFrameListener(ogre.FrameListener, ogre.WindowEventListener, OIS.M
         self.app.messenger.send("mouse-" + id.name[3:].lower(), self, evt)
     
     def mouseReleased(self, evt, id):
-        self.app.messenger.send("mouse-" + id.name[3:].lower() + "-up", self,evt)
+        self.app.messenger.send("mouse-" + id.name[3:].lower() + "-up", self, evt)
 
     def keyPressed(self, evt):
         self.app.messenger.send(evt.key.name[3:].lower(), self, evt)

@@ -52,9 +52,9 @@ class World(object):
             ent2 = mnf.getBody1().getUserPointer()['parent']
             
             ent1.sendEntityEvent("collided", ent2)
-            ent1.triggerOutput("OnCollide")
+            ent1.triggerOutput("OnCollide", ent2)
             ent2.sendEntityEvent("collided", ent1)
-            ent2.triggerOutput("OnCollide")
+            ent2.triggerOutput("OnCollide", ent1)
 
         # for cell in self.cells.itervalues():
         #     cell.simulate()
