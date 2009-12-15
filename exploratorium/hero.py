@@ -3,7 +3,7 @@ import ogre.renderer.OGRE as ogre
 from ogre.physics import bullet
 
 from supyrdupyr.entities import PhysicsEntity
-from supyrdupyr.util import clamp, multiplyVec3, multiplyQuat, matStr, vecStr
+from supyrdupyr.util import clamp, multiplyVec3, multiplyQuat, dotMat3x3, getBasisAxes, matStr, vecStr
 from math import radians
 
 class Hero(PhysicsEntity):
@@ -14,7 +14,7 @@ class Hero(PhysicsEntity):
     MAX_FAST_SPEED = 10000
     MAX_LOOK       = 1000.0
     MOVE_FRICTION  = 0.9
-    MOVE_KEYS = dict(w=(0, -SPEED), s=(0, SPEED), a=(SPEED, 0), d=(-SPEED, 0))
+    MOVE_KEYS = dict(w=(0, -SPEED, 0), s=(0, SPEED, 0), a=(SPEED, 0, 0), d=(-SPEED, 0, 0), q=(0, 0, -SPEED), e=(0, 0, SPEED))
     MASS = 10
 
     hasGhostObject = True
@@ -60,27 +60,29 @@ class Hero(PhysicsEntity):
         self.app.messenger.accept("shift", self.setMaxSpeed, [self.MAX_FAST_SPEED])
         self.app.messenger.accept("shift-up", self.setMaxSpeed, [self.MAX_SLOW_SPEED])
 
-    def move(self, dt, x, y):
+    def move(self, dt, x, y, r):
         wt = self.physBody.getWorldTransform()
-        b = wt.getBasis()
-        strafeDir, upDir, forwardDir = b[0], b[1], b[2]
-        strafeDir.normalize()
-        upDir.normalize()
-        forwardDir.normalize()
+        forwardDir, upDir, strafeDir = getBasisAxes(wt)
         
-        self.walkDirection += multiplyVec3(strafeDir, x)
-        self.walkDirection += multiplyVec3(forwardDir, y)
+        self.walkDirection += multiplyVec3(forwardDir, x)
+        self.walkDirection += multiplyVec3(strafeDir, y)
+        
+        rot = bullet.btQuaternion(bullet.btVector3(0, 1, 0), radians(r))
+        orn = wt.getBasis()
+        orn *= bullet.btMatrix3x3(rot)
+        wt.setBasis(orn)
+        self.physBody.setWorldTransform(wt)
     
     def setupCamera(self):
-        self.app.messenger.accept("mouse-moved", self.panCamera)
+        self.app.messenger.accept("mouse-moved", self.mouseMoved)
         self.xAccum, self.yAccum, self.degree = 0, 0, 0
-        self.app.camera.setPosition(0, 20, 0)
-        self.app.camera.setAutoTracking(True, self.sceneNode)
-        #self.cameraNode = self.sceneNode.createChildSceneNode("MainCameraNode")
+        #self.app.camera.setPosition(0, 20, 0)
+        #self.app.camera.setAutoTracking(True, self.sceneNode)
+        self.cameraNode = self.sceneNode.createChildSceneNode("MainCameraNode")
         #self.world.worldNode.createChildSceneNode("MainCameraNode")
-        #self.app.camera.setPosition(0, 0, -10)
-        #self.cameraNode.attachObject(self.app.camera)
-        #self.cameraNode.pitch(ogre.Degree(90))
+        self.cameraNode.attachObject(self.app.camera)
+        self.cameraNode.setPosition(0, 50, 0)
+        self.cameraNode.pitch(ogre.Degree(-90))
 
     def setupEventHandlers(self):
         self.app.messenger.accept("collided: [hero] [*]",    self.collidedWithAnything)
@@ -100,7 +102,7 @@ class Hero(PhysicsEntity):
             self.walkDirection += bullet.btVector3(0, self.JUMP_FORCE, 0)
             self.canJump = False
 
-    def panCamera(self, input, evt):
+    def mouseMoved(self, input, evt):
         ms = input.mouseInput.getMouseState()
         wt = self.physBody.getWorldTransform()
         rot = bullet.btQuaternion(bullet.btVector3(0, 1, 0), radians(ms.X.rel))
@@ -108,6 +110,7 @@ class Hero(PhysicsEntity):
         orn *= bullet.btMatrix3x3(rot)
         wt.setBasis(orn)
         self.physBody.setWorldTransform(wt)
+        self.cameraNode.roll(-radians(ms.X.rel))
         
         # self.yAccum = clamp(self.yAccum - ms.Y.rel, 0, self.MAX_LOOK)
         # degree = 90 - self.yAccum / self.MAX_LOOK * 90
@@ -131,7 +134,9 @@ class Hero(PhysicsEntity):
         wt = self.physBody.getWorldTransform()
         origin, rotation = wt.getOrigin(), wt.getRotation()
         self.sceneNode.setPosition(origin.x(), origin.y(), origin.z())
-        self.sceneNode.setOrientation(ogre.Quaternion(rotation.w(), rotation.x(), rotation.y(), rotation.z()))
+        oren = ogre.Quaternion(rotation.w(), rotation.x(), rotation.y(), rotation.z())
+        self.sceneNode.setOrientation(oren)
+        #self.cameraNode.setOrientation(oren*-1)
         
         super(Hero, self).simulate(dt)
 

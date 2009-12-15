@@ -25,6 +25,15 @@ def multiplyQuat(quat, scalar):
     from ogre.physics import bullet as bt
     return bt.btQuaternion(quat.x() * scalar, quat.y() * scalar, quat.z() * scalar, quat.w() * scalar)
 
+def dotMat3x3(m, v):
+    from ogre.physics import bullet as bt
+    return bt.btVector3(m[0].dot(v), m[1].dot(v), m[2].dot(v))
+
+def getBasisAxes(transform):
+    b = transform.getBasis()
+    from ogre.physics import bullet as bt
+    return (dotMat3x3(b, bt.btVector3(*v)) for v in ((1, 0, 0), (0, 1, 0), (0, 0, 1)))
+
 def vecStr(vec):
     return '[%f, %f, %f, %f]' % (vec.x(), vec.y(), vec.z(), vec.w())
 
